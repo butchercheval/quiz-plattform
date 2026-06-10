@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>soziale Ungleichheit 2 — 9e</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;600;700;800&family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overscroll-behavior: none; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+.quiz-wrap { max-width: 680px; margin: 0 auto; padding: 20px 16px 60px; min-height: 100vh; display: flex; flex-direction: column; }
+.step { display: none; }
+.step.active { display: block; animation: fadeUp 0.35s ease-out; }
+@keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+
+.btn-main { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 1.05em; font-weight: 700; cursor: pointer; margin-top: 24px; transition: all 0.2s; }
+.btn-main:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-next { width: 100%; padding: 14px; border: none; border-radius: 10px; font-size: 0.95em; font-weight: 600; cursor: pointer; margin-top: 20px; transition: all 0.2s; }
+.btn-next:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.name-select { width: 100%; padding: 14px; font-size: 1.1em; border-radius: 10px; margin-bottom: 20px; }
+.mood-section { margin-bottom: 4px; }
+.mood-row { display: flex; gap: 12px; margin-top: 10px; }
+.mood-btn { flex: 1; font-size: 1.8em; padding: 10px; border: 2px solid transparent; border-radius: 10px; background: #f5f5f5; cursor: pointer; transition: all 0.15s; }
+.mood-btn.selected { border-color: currentColor; transform: scale(1.1); }
+.field-label { display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 8px; }
+
+.progress-bar { height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; margin-bottom: 16px; }
+.progress-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+.question-meta { font-size: 0.78em; opacity: 0.55; margin-bottom: 6px; }
+.aufgabe-timer { font-size: 0.85em; font-weight: 600; margin-bottom: 8px; }
+.question-text { font-size: 1.05em; font-weight: 600; line-height: 1.5; margin-bottom: 20px; }
+.multi-hint { font-size: 0.78em; opacity: 0.6; margin-bottom: 10px; }
+
+.wf-row { display: flex; gap: 12px; }
+.wf-btn { flex: 1; padding: 16px; border: 2px solid #ddd; border-radius: 10px; background: white; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.wf-btn.selected { border-color: #333; background: #333; color: white; }
+
+.opt-label { display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; border: 2px solid #eee; border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; font-size: 0.95em; }
+.opt-label:hover { border-color: #bbb; }
+.opt-label input { margin-top: 2px; flex-shrink: 0; width: 18px; height: 18px; }
+.opt-label.joker-right { border-color: #2d6a4f; background: #d8f3dc; }
+.opt-label.joker-wrong { border-color: #e63946; background: #ffe8e8; text-decoration: line-through; opacity: 0.6; }
+.opt-label.joker-sworn { border-color: #f4a261; background: #fff3e0; }
+.opt-label.joker-locked { opacity: 0.35; pointer-events: none; }
+
+.kurz-input { width: 100%; padding: 14px; font-size: 1em; border: 2px solid #eee; border-radius: 10px; }
+.freitext-be-hint { font-size: 0.78em; opacity: 0.6; margin-bottom: 8px; }
+.freitext-area { width: 100%; padding: 14px; font-size: 0.95em; border: 2px solid #eee; border-radius: 10px; font-family: inherit; resize: vertical; }
+
+.section-badge { font-size: 0.75em; font-weight: 600; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.section-title { font-size: 1.4em; font-weight: 700; margin-bottom: 12px; }
+.section-desc { font-size: 0.92em; opacity: 0.75; line-height: 1.6; margin-bottom: 16px; }
+.format-hint { font-size: 0.85em; opacity: 0.8; background: rgba(0,0,0,0.04); padding: 12px; border-radius: 8px; line-height: 1.5; margin-bottom: 16px; }
+
+#timer-box { position: fixed; top: 16px; right: 16px; font-weight: 700; font-size: 1em; padding: 8px 16px; border-radius: 20px; z-index: 100; }
+.timer-warn { animation: pulse 0.6s infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.5; } }
+
+#joker-container { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px; z-index: 100; }
+#blitz-box, #schwur-box { padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 0.9em; cursor: pointer; background: white; border: 2px solid #ddd; transition: all 0.2s; }
+.joker-active { border-color: #f4a261 !important; background: #fff3e0 !important; animation: pulse 0.5s infinite alternate; }
+.joker-used { opacity: 0.35; pointer-events: none; }
+
+.result-loading { text-align: center; padding: 40px; font-size: 1.1em; opacity: 0.6; }
+.dots::after { content: ''; animation: dots 1.2s steps(3) infinite; }
+@keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+.result-meme { text-align: center; margin-bottom: 16px; }
+.result-score { text-align: center; margin-bottom: 8px; }
+.score-num { font-size: 1.8em; font-weight: 700; }
+.score-pct { font-size: 1em; opacity: 0.6; }
+.result-note { text-align: center; margin-bottom: 16px; }
+.note-display { font-size: 2.4em; font-weight: 800; }
+.note-pending { font-size: 0.95em; font-weight: 600; opacity: 0.75; background: rgba(0,0,0,0.04); border-radius: 10px; padding: 14px; line-height: 1.5; }
+.result-freischuss .freischuss-hint { text-align: center; font-size: 0.88em; opacity: 0.7; margin-bottom: 16px; padding: 10px; background: rgba(0,0,0,0.04); border-radius: 8px; }
+.result-divider { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 20px 0; }
+.aufloesung-title { font-size: 1em; font-weight: 600; margin-bottom: 12px; }
+.aufloesungs-item { padding: 14px; border-radius: 10px; margin-bottom: 8px; font-size: 0.88em; line-height: 1.5; }
+.item-richtig { background: #d8f3dc; border-left: 3px solid #2d6a4f; }
+.item-falsch { background: #ffe8e8; border-left: 3px solid #e63946; }
+.item-manuell { background: #fff8e1; border-left: 3px solid #f4a261; }
+.item-frage { font-weight: 600; margin-bottom: 6px; }
+.item-antwort { margin-bottom: 2px; }
+.item-loesung { color: #2d6a4f; }
+.item-muster { margin-top: 4px; font-style: italic; }
+.item-punkte { margin-top: 4px; font-weight: 600; opacity: 0.7; }
+.item-info { margin-top: 4px; opacity: 0.6; }
+
+.quiz-header-icon { font-size: 3em; text-align: center; margin-bottom: 12px; }
+.quiz-title { text-align: center; margin-bottom: 8px; }
+.quiz-subtitle { text-align: center; opacity: 0.65; margin-bottom: 8px; }
+.quiz-meta { text-align: center; font-size: 0.8em; opacity: 0.5; margin-bottom: 16px; }
+.quiz-timer-hint { text-align: center; font-size: 0.85em; opacity: 0.7; margin-bottom: 0; }
+
+#cheat-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; align-items: center; justify-content: center; }
+#cheat-box { background: white; border-radius: 16px; padding: 40px; text-align: center; max-width: 320px; }
+#cheat-box h2 { margin: 12px 0 8px; font-size: 1.2em; }
+#cheat-box p { opacity: 0.65; margin-bottom: 20px; }
+#cheat-box button { padding: 12px 28px; border: none; border-radius: 8px; background: #333; color: white; font-weight: 600; cursor: pointer; }
+
+
+body.theme-apple { background:#f5f5f7; color:#1d1d1f; }
+.theme-apple .card { background:white; border-radius:18px; padding:28px; margin-bottom:20px; box-shadow:0 1px 6px rgba(0,0,0,0.07); }
+.theme-apple .quiz-title { font-size:1.9em; font-weight:700; color:#1d1d1f; letter-spacing:-0.02em; }
+.theme-apple .section-title { font-size:1.4em; font-weight:700; letter-spacing:-0.01em; }
+.theme-apple .btn-main { background:#0071e3; color:white; border-radius:12px; }
+.theme-apple .btn-main:hover:not(:disabled) { background:#0077ed; }
+.theme-apple .btn-next { background:#0071e3; color:white; border-radius:10px; }
+.theme-apple .wf-btn { border-radius:10px; }
+.theme-apple .wf-btn.selected { background:#1d1d1f; border-color:#1d1d1f; }
+.theme-apple .opt-label { border-radius:10px; }
+.theme-apple .opt-label:hover { background:#f5f5f7; border-color:#999; }
+.theme-apple .progress-fill { background:#0071e3; }
+.theme-apple #timer-box { background:#1d1d1f; color:white; border-radius:20px; }
+.theme-apple .note-display { color:#0071e3; }
+.theme-apple .meme-apple { font-size:1.1em; font-weight:500; letter-spacing:-0.01em; color:#1d1d1f; padding:16px 0; }
+.theme-apple .name-select { border:1px solid #ccc; border-radius:10px; }
+.theme-apple .kurz-input,.theme-apple .freitext-area { border-color:#ccc; border-radius:10px; }
+
+</style>
+</head>
+<body class="theme-apple">
+
+<div id="timer-box" style="display:none"></div>
+<div id="joker-container" style="display:none">
+  <div id="blitz-box" onclick="activateJoker('blitz')"></div>
+  <div id="schwur-box" onclick="activateJoker('schwur')"></div>
+</div>
+
+<div class="quiz-wrap">
+
+  <!-- SCHRITT 0: WILLKOMMEN -->
+  <div id="step-welcome" class="step active">
+    <div class="card">
+      <div class="quiz-header-icon">📚</div>
+      <h1 class="quiz-title">soziale Ungleichheit 2</h1>
+      
+      <p class="quiz-meta">9e · Sozi · 10.06.2026</p>
+      <p class="quiz-timer-hint">⏱ Zeit: 10 Minuten</p>
+      <button class="btn-main" onclick="goToStep('step-login')">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- SCHRITT 1: LOGIN -->
+  <div id="step-login" class="step">
+    <div class="card">
+      <h2 class="step-title">Wer bist du?</h2>
+      <label class="field-label">Wähle deinen Namen</label>
+      <select id="name-select" class="name-select" onchange="onNameSelect()">
+        <option value="">— Bitte auswählen —</option>
+        <option value="Afra">Afra</option><option value="Ann-Kathrin">Ann-Kathrin</option><option value="Anton">Anton</option><option value="Arjen">Arjen</option><option value="Basti">Basti</option><option value="Cedric">Cedric</option><option value="Dodo">Dodo</option><option value="Emilia">Emilia</option><option value="Franka">Franka</option><option value="Hilde">Hilde</option><option value="Josi F.">Josi F.</option><option value="Josi R.">Josi R.</option><option value="Karl">Karl</option><option value="Lara">Lara</option><option value="Lena">Lena</option><option value="Leni">Leni</option><option value="Luis">Luis</option><option value="Nico">Nico</option><option value="Niklas">Niklas</option><option value="Selma">Selma</option><option value="Stina">Stina</option><option value="Tilly">Tilly</option><option value="Vici">Vici</option><option value="Wolke">Wolke</option><option value="Xenia">Xenia</option>
+      </select>
+
+      <div class="mood-section">
+        <label class="field-label">Wie geht es dir heute? 😊</label>
+        <div class="mood-row">
+          <button class="mood-btn" onclick="selectMood(this, '😩 Schlecht')" title="Schlecht">😩</button>
+          <button class="mood-btn" onclick="selectMood(this, '😕 Nicht so gut')" title="Nicht so gut">😕</button>
+          <button class="mood-btn" onclick="selectMood(this, '😐 Geht so')" title="Geht so">😐</button>
+          <button class="mood-btn" onclick="selectMood(this, '🙂 Gut')" title="Gut">🙂</button>
+          <button class="mood-btn" onclick="selectMood(this, '😄 Super!')" title="Super!">😄</button>
+        </div>
+      </div>
+
+      <button class="btn-main" id="btn-start" disabled onclick="startQuiz()">Los geht's! 🚀</button>
+    </div>
+  </div>
+
+  <!-- DYNAMISCHER QUIZ-CONTAINER (Abschnitte werden hier eingefügt) -->
+  <div id="quiz-container"></div>
+
+  <!-- ERGEBNIS -->
+  <div id="step-result" class="step">
+    <div class="card result-card">
+      <div id="result-loading" class="result-loading">Wird ausgewertet<span class="dots">...</span></div>
+      <div id="result-content" style="display:none">
+        <div id="result-meme" class="result-meme"></div>
+        <div id="result-score" class="result-score"></div>
+        <div id="result-note" class="result-note"></div>
+        <div id="result-freischuss" class="result-freischuss"></div>
+        <div class="result-divider"></div>
+        <h3 class="aufloesung-title">📋 Auflösung</h3>
+        <div id="result-aufloesung"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SCHUMMELN-OVERLAY -->
+<div id="cheat-overlay" style="display:none" onclick="closeCheatOverlay()">
+  <div id="cheat-box">
+    <div style="font-size:3em;">😤</div>
+    <h2>EY! DU WOLLTEST SCHUMMELN!</h2>
+    <p>Reiß dich gefälligst zusammen!</p>
+    <button>Weiter geht's →</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  QUIZ KONFIGURATION
+// ════════════════════════════════════════════════════════════
+const QUIZ_CFG = {
+  "id": "9e_soziale_Ungleichheit_2",
+  "titel": "soziale Ungleichheit 2",
+  "untertitel": "",
+  "klasse": "9e",
+  "fach": "Sozi",
+  "datum": "10.06.2026",
+  "stufe": "mittel",
+  "design": "apple",
+  "timerGesamt": 600,
+  "timerAufgabe": 0,
+  "jokerAktiv": true,
+  "freischussBE": 1,
+  "schueler": [
+    "Afra",
+    "Ann-Kathrin",
+    "Anton",
+    "Arjen",
+    "Basti",
+    "Cedric",
+    "Dodo",
+    "Emilia",
+    "Franka",
+    "Hilde",
+    "Josi F.",
+    "Josi R.",
+    "Karl",
+    "Lara",
+    "Lena",
+    "Leni",
+    "Luis",
+    "Nico",
+    "Niklas",
+    "Selma",
+    "Stina",
+    "Tilly",
+    "Vici",
+    "Wolke",
+    "Xenia"
+  ],
+  "googleForm": {
+    "url": "https://docs.google.com/forms/d/e/1FAIpQLSfy0B1GodLORoWHvVHP-NvEOwUvIGWy92x9nyDIHMHWP4mNpQ/formResponse",
+    "felder": {
+      "name": "entry.1343002961",
+      "klasse": "entry.23967713",
+      "fach": "entry.1822390883",
+      "quizId": "entry.1171327755",
+      "quizTitel": "entry.32255665",
+      "stimmung": "entry.1818303094",
+      "punkte": "entry.1341435703",
+      "maxPunkte": "entry.1943585771",
+      "note": "entry.894086258",
+      "details": "entry.274114567",
+      "tabFlags": "entry.546795561",
+      "jokerDetails": "entry.2120640210",
+      "timeout": "entry.668073591"
+    }
+  },
+  "abschnitte": [
+    {
+      "id": "a1",
+      "titel": "Theoretische Zugänge: Klasse, Schicht, Milieu",
+      "beschreibung": "Zentrale soziologische Konzepte zur Beschreibung sozialer Ungleichheit.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Kurzantwort.",
+      "fragen": [
+        {
+          "id": "q1",
+          "typ": "wahr_falsch",
+          "text": "Nach Karl Marx ergibt sich die Klassenlage primär aus dem Verhältnis zu den Produktionsmitteln (Besitz vs. Nicht-Besitz), während Max Weber zusätzlich Markt- und Statuschancen berücksichtigt.",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q2",
+          "typ": "wahr_falsch",
+          "text": "Das Konzept der 'sozialen Milieus' (z.B. Sinus-Milieus) gruppiert Menschen ausschließlich nach ihrem Einkommen, unabhängig von Werten und Lebensstil.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q3",
+          "typ": "multiple_choice_single",
+          "text": "Welcher Begriff bezeichnet bei Pierre Bourdieu die verinnerlichten Denk-, Wahrnehmungs- und Handlungsmuster, die durch die soziale Herkunft geprägt werden?",
+          "optionen": [
+            {
+              "text": "Habitus",
+              "korrekt": true
+            },
+            {
+              "text": "Anomie",
+              "korrekt": false
+            },
+            {
+              "text": "Entfremdung",
+              "korrekt": false
+            },
+            {
+              "text": "Sozialcharakter",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q4",
+          "typ": "multiple_choice_multi",
+          "text": "Welche der folgenden Kapitalsorten unterscheidet Pierre Bourdieu in seiner Kapitaltheorie? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Ökonomisches Kapital (Geld, Besitz)",
+              "korrekt": true
+            },
+            {
+              "text": "Kulturelles Kapital (z.B. Bildungstitel, Sprachstil)",
+              "korrekt": true
+            },
+            {
+              "text": "Soziales Kapital (Netzwerke, Beziehungen)",
+              "korrekt": true
+            },
+            {
+              "text": "Demokratisches Kapital",
+              "korrekt": false
+            },
+            {
+              "text": "Territoriales Kapital",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q5",
+          "typ": "kurzantwort",
+          "text": "Wie nennt man ein Schichtungsmodell, das die Gesellschaft anhand von Einkommen, Bildung und beruflichem Prestige in mehrere übereinanderliegende Gruppen einteilt (z.B. Ober-, Mittel-, Unterschicht)?",
+          "loesung": "Schichtmodell",
+          "alternativloesungen": [
+            "sozialstrukturmodell",
+            "schichtungsmodell"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a2",
+      "titel": "Messung sozialer Ungleichheit",
+      "beschreibung": "Statistische Kennzahlen und Indikatoren, mit denen Ungleichheit erfasst wird.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Kurzantwort.",
+      "fragen": [
+        {
+          "id": "q6",
+          "typ": "wahr_falsch",
+          "text": "Ein Gini-Koeffizient von 0 bedeutet vollkommene Gleichverteilung, ein Wert nahe 1 (bzw. 100) bedeutet maximale Ungleichverteilung.",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q7",
+          "typ": "wahr_falsch",
+          "text": "Die Armutsgefährdungsquote in Deutschland wird absolut definiert, also als fester Eurobetrag, der jedes Jahr gleich bleibt.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q8",
+          "typ": "multiple_choice_single",
+          "text": "Wie ist die Armutsgefährdungsquote in der EU üblicherweise definiert?",
+          "optionen": [
+            {
+              "text": "Anteil der Personen mit einem Äquivalenzeinkommen unter 60% des mittleren Einkommens (Median) der Bevölkerung",
+              "korrekt": true
+            },
+            {
+              "text": "Anteil der Personen ohne festen Wohnsitz",
+              "korrekt": false
+            },
+            {
+              "text": "Anteil der Personen, die Sozialhilfe beziehen, gemessen am Bundeshaushalt",
+              "korrekt": false
+            },
+            {
+              "text": "Anteil der Personen mit einem Einkommen unter dem gesetzlichen Mindestlohn",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q9",
+          "typ": "multiple_choice_multi",
+          "text": "Welche der folgenden Kennzahlen werden zur Messung von Einkommens- bzw. Vermögensungleichheit verwendet? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Gini-Koeffizient",
+              "korrekt": true
+            },
+            {
+              "text": "Dezilverhältnis (z.B. Verhältnis des Einkommens des obersten zum untersten Zehntel)",
+              "korrekt": true
+            },
+            {
+              "text": "Armutsgefährdungsquote",
+              "korrekt": true
+            },
+            {
+              "text": "Bruttoinlandsprodukt (BIP) pro Kopf",
+              "korrekt": false
+            },
+            {
+              "text": "Verbraucherpreisindex (Inflationsrate)",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q10",
+          "typ": "kurzantwort",
+          "text": "Wie heißt die grafische Darstellung, die zeigt, wie stark die tatsächliche Einkommens- bzw. Vermögensverteilung von der Linie der Gleichverteilung abweicht?",
+          "loesung": "Lorenzkurve",
+          "alternativloesungen": [
+            "lorenz-kurve"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a3",
+      "titel": "Einkommens- und Vermögensverteilung in Deutschland",
+      "beschreibung": "Empirische Befunde zur Verteilung von Einkommen und Vermögen.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Freitextaufgabe.",
+      "fragen": [
+        {
+          "id": "q11",
+          "typ": "wahr_falsch",
+          "text": "In Deutschland ist die Vermögensverteilung deutlich ungleicher als die Einkommensverteilung.",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q12",
+          "typ": "wahr_falsch",
+          "text": "Das reichste Zehntel der Haushalte in Deutschland besitzt nach aktuellen Erhebungen weniger als 20% des gesamten Nettovermögens.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q13",
+          "typ": "multiple_choice_single",
+          "text": "Welche Aussage zum Verhältnis von Einkommen und Vermögen trifft zu?",
+          "optionen": [
+            {
+              "text": "Vermögen kann durch Kapitalerträge (z.B. Zinsen, Dividenden, Mieteinnahmen) zusätzliches Einkommen erzeugen, wodurch sich Ungleichheiten verstärken können.",
+              "korrekt": true
+            },
+            {
+              "text": "Einkommen und Vermögen sind in Deutschland gesetzlich auf denselben Höchstbetrag begrenzt.",
+              "korrekt": false
+            },
+            {
+              "text": "Vermögen wird in Deutschland jährlich vollständig versteuert und danach gleichmäßig verteilt.",
+              "korrekt": false
+            },
+            {
+              "text": "Vermögensunterschiede spielen für die Einkommensverteilung keine Rolle.",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q14",
+          "typ": "multiple_choice_multi",
+          "text": "Welche Faktoren tragen zur Konzentration von Vermögen bei wenigen Haushalten bei? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Erbschaften und Schenkungen innerhalb vermögender Familien",
+              "korrekt": true
+            },
+            {
+              "text": "Kapitaleinkünfte (z.B. aus Aktien, Immobilien), die reinvestiert werden können",
+              "korrekt": true
+            },
+            {
+              "text": "Ungleicher Zugang zu Immobilieneigentum",
+              "korrekt": true
+            },
+            {
+              "text": "Die regelmäßige Erhöhung des gesetzlichen Mindestlohns",
+              "korrekt": false
+            },
+            {
+              "text": "Die Einführung des Kindergelds",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q15",
+          "typ": "freitext",
+          "text": "Erkläre, warum die Vermögensverteilung in Deutschland in der Regel deutlich ungleicher ist als die Einkommensverteilung, und nenne ein Argument, das für und eines, das gegen eine stärkere Besteuerung von Vermögen (z.B. eine Vermögensteuer) spricht.",
+          "maxBE": 5,
+          "musterloesung": "Die Vermögensverteilung ist ungleicher als die Einkommensverteilung, weil sich Vermögen über Generationen hinweg ansammeln und durch Zinseszins-Effekte sowie Kapitalerträge (Mieten, Dividenden, Kursgewinne) selbst weiter vermehren kann ('Geld arbeitet für Geld'). Während Einkommen meist an die aktuelle Erwerbstätigkeit gebunden ist und damit gewissen Grenzen unterliegt, kann Vermögen zusätzlich durch Erbschaften weitergegeben werden, wodurch bestehende Unterschiede über Generationen hinweg verfestigt und teils verstärkt werden ('Vererbung von Ungleichheit'). Argument FÜR eine stärkere Vermögensbesteuerung: Sie könnte zu mehr Verteilungsgerechtigkeit beitragen und zusätzliche Staatseinnahmen generieren, die z.B. für Bildung oder Infrastruktur verwendet werden können, wovon auch einkommensschwächere Gruppen profitieren. Argument GEGEN eine stärkere Vermögensbesteuerung: Kritiker befürchten negative Anreizeffekte (z.B. Investitionszurückhaltung, Kapitalabwanderung ins Ausland) sowie hohen bürokratischen Aufwand bei der Bewertung von Vermögenswerten (insbesondere Betriebsvermögen und Immobilien), was Arbeitsplätze gefährden könnte."
+        }
+      ]
+    },
+    {
+      "id": "a4",
+      "titel": "Bildung und soziale Mobilität",
+      "beschreibung": "Zusammenhänge zwischen sozialer Herkunft, Bildungserfolg und Aufstiegschancen.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Kurzantwort.",
+      "fragen": [
+        {
+          "id": "q16",
+          "typ": "wahr_falsch",
+          "text": "Internationale Vergleichsstudien wie PISA zeigen, dass in Deutschland der Zusammenhang zwischen sozialer Herkunft und Bildungserfolg im internationalen Vergleich besonders schwach ausgeprägt ist.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q17",
+          "typ": "wahr_falsch",
+          "text": "Soziale Mobilität bezeichnet den Wechsel von Personen oder Gruppen zwischen unterschiedlichen Positionen der Sozialstruktur, z.B. zwischen verschiedenen sozialen Schichten.",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q18",
+          "typ": "multiple_choice_single",
+          "text": "Wie wird der enge Zusammenhang zwischen sozialer Herkunft und Bildungschancen in Deutschland häufig bezeichnet?",
+          "optionen": [
+            {
+              "text": "Bildungsschere bzw. soziale Selektivität des Bildungssystems",
+              "korrekt": true
+            },
+            {
+              "text": "Demografischer Wandel",
+              "korrekt": false
+            },
+            {
+              "text": "Strukturwandel",
+              "korrekt": false
+            },
+            {
+              "text": "Wertewandel",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q19",
+          "typ": "multiple_choice_multi",
+          "text": "Welche Faktoren begünstigen nachweislich den Bildungserfolg von Kindern aus bildungsfernen bzw. einkommensschwachen Familien? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Frühkindliche Förderung (z.B. qualitativ hochwertige Kitas)",
+              "korrekt": true
+            },
+            {
+              "text": "Ganztagsschulen mit individueller Förderung",
+              "korrekt": true
+            },
+            {
+              "text": "Finanzielle Unterstützung für Lernmittel, Nachhilfe oder Studium (z.B. BAföG)",
+              "korrekt": true
+            },
+            {
+              "text": "Eine frühere Aufteilung der Schüler auf verschiedene Schularten nach der Grundschule",
+              "korrekt": false
+            },
+            {
+              "text": "Größere Klassen ohne zusätzliches pädagogisches Personal",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q20",
+          "typ": "kurzantwort",
+          "text": "Wie nennt man den Effekt, dass Kinder von Akademiker-Eltern bei gleicher Schulleistung deutlich häufiger eine Gymnasialempfehlung erhalten als Kinder von Nicht-Akademiker-Eltern?",
+          "loesung": "primärer und sekundärer Herkunftseffekt",
+          "alternativloesungen": [
+            "herkunftseffekt",
+            "sekundärer herkunftseffekt",
+            "primärer herkunftseffekt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a5",
+      "titel": "Arbeitsmarkt, Geschlecht und Ungleichheit",
+      "beschreibung": "Geschlechtsspezifische Unterschiede auf dem Arbeitsmarkt und ihre Ursachen.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Kurzantwort.",
+      "fragen": [
+        {
+          "id": "q21",
+          "typ": "wahr_falsch",
+          "text": "Der unbereinigte Gender Pay Gap in Deutschland lag in den letzten Jahren bei rund 18%, also deutlich über 0%.",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q22",
+          "typ": "wahr_falsch",
+          "text": "Eine direkte Lohndiskriminierung aufgrund des Geschlechts bei gleicher Tätigkeit, gleicher Qualifikation und gleichem Betrieb ist in Deutschland gesetzlich erlaubt.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q23",
+          "typ": "multiple_choice_single",
+          "text": "Was misst der 'bereinigte' Gender Pay Gap im Unterschied zum 'unbereinigten'?",
+          "optionen": [
+            {
+              "text": "Den Lohnunterschied zwischen Männern und Frauen, nachdem Faktoren wie Beruf, Branche, Arbeitszeit und Qualifikation statistisch herausgerechnet wurden",
+              "korrekt": true
+            },
+            {
+              "text": "Den durchschnittlichen Lohnunterschied zwischen allen Beschäftigten unabhängig vom Geschlecht",
+              "korrekt": false
+            },
+            {
+              "text": "Den Unterschied zwischen Brutto- und Nettolohn",
+              "korrekt": false
+            },
+            {
+              "text": "Den Lohnunterschied zwischen Vollzeit- und Teilzeitbeschäftigten unabhängig vom Geschlecht",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q24",
+          "typ": "multiple_choice_multi",
+          "text": "Welche Faktoren tragen zum (unbereinigten) Gender Pay Gap bei? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Höherer Anteil von Frauen in Teilzeitbeschäftigung",
+              "korrekt": true
+            },
+            {
+              "text": "Unterschiedliche Berufswahl (Frauen häufiger in tendenziell schlechter bezahlten Branchen)",
+              "korrekt": true
+            },
+            {
+              "text": "Erwerbsunterbrechungen, z.B. durch Elternzeit, die häufiger von Frauen wahrgenommen werden",
+              "korrekt": true
+            },
+            {
+              "text": "Ein gesetzlich vorgeschriebener niedrigerer Mindestlohn für Frauen",
+              "korrekt": false
+            },
+            {
+              "text": "Eine kürzere gesetzliche Wochenarbeitszeit für Männer",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q25",
+          "typ": "kurzantwort",
+          "text": "Wie nennt man die unsichtbaren, schwer greifbaren Hindernisse, die Frauen (und andere Gruppen) am beruflichen Aufstieg in Führungspositionen hindern?",
+          "loesung": "gläserne Decke",
+          "alternativloesungen": [
+            "glass ceiling",
+            "glaeserne decke"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a6",
+      "titel": "Sozialstaat, Umverteilung und politische Maßnahmen",
+      "beschreibung": "Wie der Sozialstaat auf soziale Ungleichheit reagiert und welche Zielkonflikte dabei entstehen.",
+      "formatHinweis": "Wahr/Falsch, Multiple-Choice (eine oder mehrere richtige Antworten) und eine Freitextaufgabe.",
+      "fragen": [
+        {
+          "id": "q26",
+          "typ": "wahr_falsch",
+          "text": "Das Sozialstaatsprinzip ist im Grundgesetz verankert (u.a. Art. 20 GG: 'Die Bundesrepublik Deutschland ist ein demokratischer und sozialer Bundesstaat').",
+          "loesung": "wahr"
+        },
+        {
+          "id": "q27",
+          "typ": "wahr_falsch",
+          "text": "Eine progressive Einkommensteuer bedeutet, dass alle Steuerpflichtigen unabhängig von ihrem Einkommen denselben Steuersatz zahlen.",
+          "loesung": "falsch"
+        },
+        {
+          "id": "q28",
+          "typ": "multiple_choice_single",
+          "text": "Welches Ziel verfolgt eine progressive Einkommensteuer primär im Hinblick auf soziale Ungleichheit?",
+          "optionen": [
+            {
+              "text": "Eine Umverteilung von hohen zu niedrigen Einkommen, da höhere Einkommen prozentual stärker besteuert werden",
+              "korrekt": true
+            },
+            {
+              "text": "Eine Erhöhung der Staatsverschuldung",
+              "korrekt": false
+            },
+            {
+              "text": "Eine Senkung der Steuerlast für alle Einkommensgruppen gleichermaßen",
+              "korrekt": false
+            },
+            {
+              "text": "Eine Abschaffung der Sozialversicherungen",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q29",
+          "typ": "multiple_choice_multi",
+          "text": "Welche der folgenden Instrumente zählen zu den klassischen Maßnahmen des deutschen Sozialstaats zur Verringerung sozialer Ungleichheit? (Mehrfachauswahl möglich)",
+          "optionen": [
+            {
+              "text": "Gesetzliche Sozialversicherungen (z.B. Renten-, Kranken-, Arbeitslosenversicherung)",
+              "korrekt": true
+            },
+            {
+              "text": "Progressive Einkommensteuer",
+              "korrekt": true
+            },
+            {
+              "text": "Transferleistungen wie Kindergeld oder Bürgergeld",
+              "korrekt": true
+            },
+            {
+              "text": "Eine einheitliche Kopfsteuer, die von allen Bürgern den gleichen Eurobetrag verlangt",
+              "korrekt": false
+            },
+            {
+              "text": "Der vollständige Verzicht auf staatliche Mindestlöhne",
+              "korrekt": false
+            }
+          ]
+        },
+        {
+          "id": "q30",
+          "typ": "freitext",
+          "text": "Erläutere den Zielkonflikt zwischen 'Verteilungsgerechtigkeit' (Verringerung sozialer Ungleichheit durch Umverteilung) und 'Leistungsgerechtigkeit bzw. Leistungsanreizen' (Belohnung individueller Anstrengung und Leistung). Nenne ein Beispiel aus der aktuellen sozialpolitischen Debatte, an dem dieser Zielkonflikt sichtbar wird.",
+          "maxBE": 5,
+          "musterloesung": "Verteilungsgerechtigkeit zielt darauf ab, große Unterschiede bei Einkommen, Vermögen und Lebenschancen durch staatliche Umverteilung (z.B. progressive Steuern, Sozialleistungen) zu verringern, um allen Menschen ein menschenwürdiges Leben und faire Teilhabechancen zu ermöglichen. Leistungsgerechtigkeit bzw. das Prinzip der Leistungsanreize geht hingegen davon aus, dass individuelle Anstrengung, Qualifikation und Risikobereitschaft sich auch finanziell lohnen müssen, da sonst Anreize zu Arbeit, Weiterbildung und wirtschaftlichem Engagement sinken könnten. Der Zielkonflikt entsteht, weil eine sehr starke Umverteilung (z.B. sehr hohe Steuersätze auf hohe Einkommen oder sehr hohe Sozialleistungen) zwar die Ungleichheit verringern kann, aber möglicherweise den Anreiz schwächt, mehr zu arbeiten, ein Studium aufzunehmen oder ein Unternehmen zu gründen – während eine zu geringe Umverteilung zu wachsender Ungleichheit und sozialen Spannungen führen kann. Ein Beispiel aus der aktuellen Debatte ist die Diskussion um den 'Lohnabstand' zwischen Bürgergeld und Mindestlohn-Einkommen: Kritiker befürchten, dass sich Erwerbsarbeit für manche kaum noch lohnt, wenn der Unterschied zu Transferleistungen zu gering ist, während Befürworter höherer Transferleistungen auf die Notwendigkeit eines menschenwürdigen Existenzminimums verweisen."
+        }
+      ]
+    }
+  ]
+};
+
+// ════════════════════════════════════════════════════════════
+//  NOTENSCHLÜSSEL
+// ════════════════════════════════════════════════════════════
+const NOTEN = {
+  mittel: [ [96,1],[80,2],[60,3],[40,4],[20,5],[0,6] ],
+  ober:   [ [95,15],[90,14],[85,13],[80,12],[75,11],[70,10],[65,9],[60,8],[55,7],[50,6],[45,5],[40,4],[33,3],[27,2],[20,1],[0,0] ]
+};
+
+function getNote(prozent, stufe) {
+  const skala = NOTEN[stufe] || NOTEN.mittel;
+  for (const [schwelle, note] of skala) {
+    if (prozent >= schwelle) return note;
+  }
+  return stufe === 'ober' ? 0 : 6;
+}
+
+// ════════════════════════════════════════════════════════════
+//  ZUSTAND
+// ════════════════════════════════════════════════════════════
+let state = {
+  name: '',
+  stimmung: '',
+  antworten: {},      // fid → Antwort
+  jokerBlitz: 3,
+  jokerSchwur: 1,
+  aktJoker: null,     // 'blitz' | 'schwur' | null
+  jokerLog: [],
+  tabWechsel: 0,
+  tabWechselLang: 0,  // > 10s
+  tabStart: null,
+  fullscreenVerlassen: 0,
+  timerGesamtLaeuft: null,
+  timerAufgabeLaeuft: null,
+  zeitAbgelaufen: false,
+  aufgabeTimeout: {},
+  abgegeben: false
+};
+
+// ════════════════════════════════════════════════════════════
+//  INITIALISIERUNG
+// ════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  // Bereits abgegeben?
+  const key = QUIZ_CFG.id + '_' + QUIZ_CFG.klasse;
+  if (localStorage.getItem('quiz_done_' + key)) {
+    goToStep('step-result');
+    document.getElementById('result-loading').style.display = 'none';
+    document.getElementById('result-content').innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Du hast dieses Quiz bereits abgegeben. ✓</p>';
+    document.getElementById('result-content').style.display = 'block';
+    return;
+  }
+
+  // Anti-Cheat: Pull-to-Refresh blockieren (nur am oberen Rand nach unten ziehen)
+  let touchStartY = 0;
+  document.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    const scrollEl = document.scrollingElement || document.documentElement;
+    const ziehtNachUnten = e.touches[0].clientY > touchStartY;
+    if (scrollEl.scrollTop <= 0 && ziehtNachUnten && e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  // Anti-Cheat: Copy/Paste
+  document.addEventListener('copy', handleCheat);
+  document.addEventListener('paste', handleCheat);
+  document.addEventListener('cut', handleCheat);
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Anti-Cheat: Tab-Wechsel
+  document.addEventListener('visibilitychange', handleVisibility);
+
+  // Fragen mischen
+  QUIZ_CFG.abschnitte.forEach(abs => {
+    shuffle(abs.fragen);
+    abs.fragen.forEach(f => { if (f.optionen) shuffle(f.optionen); });
+  });
+
+  // Quiz-UI aufbauen
+  buildQuizUI();
+  updateJokerUI();
+});
+
+// ════════════════════════════════════════════════════════════
+//  ANTI-CHEAT
+// ════════════════════════════════════════════════════════════
+function handleCheat(e) {
+  e.preventDefault();
+  document.getElementById('cheat-overlay').style.display = 'flex';
+}
+function closeCheatOverlay() {
+  document.getElementById('cheat-overlay').style.display = 'none';
+}
+
+function handleVisibility() {
+  if (document.hidden) {
+    state.tabStart = Date.now();
+  } else {
+    if (state.tabStart) {
+      const dauer = (Date.now() - state.tabStart) / 1000;
+      state.tabWechsel++;
+      if (dauer > 10) state.tabWechselLang++;
+      state.tabStart = null;
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SCHRITT-NAVIGATION
+// ════════════════════════════════════════════════════════════
+function goToStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active'); window.scrollTo(0,0); }
+}
+
+function onNameSelect() {
+  state.name = document.getElementById('name-select').value;
+  updateStartBtn();
+}
+function selectMood(btn, val) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  state.stimmung = val;
+  updateStartBtn();
+}
+function updateStartBtn() {
+  const ok = state.name && state.stimmung;
+  document.getElementById('btn-start').disabled = !ok;
+}
+
+// ════════════════════════════════════════════════════════════
+//  QUIZ STARTEN
+// ════════════════════════════════════════════════════════════
+function startQuiz() {
+  if (!state.name || !state.stimmung) return;
+
+  // Vollbild anfordern
+  try { document.documentElement.requestFullscreen(); } catch(e) {}
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) state.fullscreenVerlassen++;
+  });
+
+  if (QUIZ_CFG.jokerAktiv) document.getElementById('joker-container').style.display = 'flex';
+
+  if (QUIZ_CFG.timerGesamt > 0) startGesamtTimer(QUIZ_CFG.timerGesamt);
+
+  goToStep('step-abs-intro-0');
+}
+
+// ════════════════════════════════════════════════════════════
+//  QUIZ UI AUFBAUEN
+// ════════════════════════════════════════════════════════════
+function buildQuizUI() {
+  const container = document.getElementById('quiz-container');
+  container.innerHTML = '';
+  let frageNr = 1;
+
+  QUIZ_CFG.abschnitte.forEach((abs, absIdx) => {
+    // Abschnitts-Intro
+    const intro = document.createElement('div');
+    intro.id = `step-abs-intro-${absIdx}`;
+    intro.className = 'step';
+    intro.innerHTML = `
+      <div class="card section-intro-card">
+        <div class="section-badge">Abschnitt ${absIdx+1} von ${QUIZ_CFG.abschnitte.length}</div>
+        <h2 class="section-title">${esc(abs.titel)}</h2>
+        ${abs.beschreibung ? `<p class="section-desc">${esc(abs.beschreibung)}</p>` : ''}
+        ${abs.formatHinweis ? `<div class="format-hint"><strong>Aufgabenformat:</strong> ${esc(abs.formatHinweis)}</div>` : ''}
+        <button class="btn-main" onclick="startAbschnitt(${absIdx})">Abschnitt starten →</button>
+      </div>
+    `;
+    container.appendChild(intro);
+
+    // Fragen des Abschnitts
+    abs.fragen.forEach((frage, frageIdx) => {
+      const stepDiv = document.createElement('div');
+      stepDiv.id = `step-f-${frage.id}`;
+      stepDiv.className = 'step';
+      stepDiv.dataset.absIdx = absIdx;
+      stepDiv.dataset.frageIdx = frageIdx;
+      stepDiv.dataset.frageId = frage.id;
+
+      const gesamtFragen = QUIZ_CFG.abschnitte.reduce((s,a) => s + a.fragen.length, 0);
+      const progress = Math.round((frageNr - 1) / gesamtFragen * 100);
+
+      stepDiv.innerHTML = `
+        <div class="card question-card">
+          <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+          <div class="question-meta">Frage ${frageNr} von ${gesamtFragen}</div>
+          ${QUIZ_CFG.timerAufgabe ? `<div id="atimer-${frage.id}" class="aufgabe-timer"></div>` : ''}
+          <div class="question-text">${esc(frage.text)}</div>
+          <div class="answer-area" id="area-${frage.id}">
+            ${buildAnswerHTML(frage)}
+          </div>
+          <button class="btn-next" id="btn-next-${frage.id}" onclick="nextFrage(${absIdx}, ${frageIdx})" ${canAdvance(frage) ? '' : 'disabled'}>
+            ${isLast(absIdx, frageIdx) ? 'Quiz abschicken ✓' : 'Weiter →'}
+          </button>
+        </div>
+      `;
+      container.appendChild(stepDiv);
+      frageNr++;
+    });
+  });
+}
+
+function buildAnswerHTML(frage) {
+  const fid = frage.id;
+  if (frage.typ === 'wahr_falsch') {
+    return `
+      <div class="wf-row">
+        <button class="wf-btn" id="wf-wahr-${fid}" onclick="saveWF('${fid}','wahr')">✓ Wahr</button>
+        <button class="wf-btn" id="wf-falsch-${fid}" onclick="saveWF('${fid}','falsch')">✗ Falsch</button>
+      </div>
+    `;
+  }
+  if (frage.typ === 'multiple_choice_single') {
+    return frage.optionen.map((opt, i) =>
+      `<label class="opt-label" id="opt-${fid}-${i}">
+        <input type="radio" name="${fid}" value="${i}" onchange="saveMCSingle('${fid}', ${i})">
+        <span>${esc(opt.text)}</span>
+      </label>`
+    ).join('');
+  }
+  if (frage.typ === 'multiple_choice_multi') {
+    return `<p class="multi-hint">Mehrfachauswahl möglich</p>` + frage.optionen.map((opt, i) =>
+      `<label class="opt-label" id="opt-${fid}-${i}">
+        <input type="checkbox" value="${i}" onchange="saveMCMulti('${fid}', ${i}, this.checked)">
+        <span>${esc(opt.text)}</span>
+      </label>`
+    ).join('');
+  }
+  if (frage.typ === 'kurzantwort') {
+    return `<input type="text" class="kurz-input" id="kurz-${fid}" placeholder="Deine Antwort..." oninput="saveKurz('${fid}', this.value)">`;
+  }
+  if (frage.typ === 'freitext') {
+    return `
+      <p class="freitext-be-hint">Bewertung: bis zu ${frage.maxBE} Punkte (Lehrer bewertet)</p>
+      <textarea class="freitext-area" id="ft-${fid}" rows="5" placeholder="Deine ausführliche Antwort..." oninput="saveFreitext('${fid}', this.value)"></textarea>
+    `;
+  }
+  return '';
+}
+
+function canAdvance(frage) {
+  return frage.typ === 'freitext'; // Freitext immer weiter möglich
+}
+
+function isLast(absIdx, frageIdx) {
+  return absIdx === QUIZ_CFG.abschnitte.length - 1 &&
+         frageIdx === QUIZ_CFG.abschnitte[absIdx].fragen.length - 1;
+}
+
+// ════════════════════════════════════════════════════════════
+//  ANTWORT SPEICHERN
+// ════════════════════════════════════════════════════════════
+function saveWF(fid, val) {
+  state.antworten[fid] = val;
+  document.getElementById(`wf-wahr-${fid}`).classList.toggle('selected', val === 'wahr');
+  document.getElementById(`wf-falsch-${fid}`).classList.toggle('selected', val === 'falsch');
+  enableNextBtn(fid);
+
+  // Joker-Interaktion
+  if (state.aktJoker) { /* WF not supported for joker */ state.aktJoker = null; updateJokerUI(); }
+}
+
+function saveMCSingle(fid, optIdx) {
+  if (handleJokerClick(fid, optIdx, false)) return;
+  state.antworten[fid] = optIdx;
+  enableNextBtn(fid);
+}
+
+function saveMCMulti(fid, optIdx, checked) {
+  if (!state.antworten[fid]) state.antworten[fid] = [];
+  if (handleJokerClick(fid, optIdx, true)) return;
+  if (checked) state.antworten[fid].push(optIdx);
+  else state.antworten[fid] = state.antworten[fid].filter(i => i !== optIdx);
+  enableNextBtn(fid);
+}
+
+function saveKurz(fid, val) {
+  state.antworten[fid] = val.trim();
+  enableNextBtn(fid);
+}
+
+function saveFreitext(fid, val) {
+  state.antworten[fid] = val;
+}
+
+function enableNextBtn(fid) {
+  const btn = document.getElementById(`btn-next-${fid}`);
+  if (btn) btn.disabled = false;
+}
+
+// ════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════
+function startAbschnitt(absIdx) {
+  const erste = QUIZ_CFG.abschnitte[absIdx].fragen[0];
+  goToStep(`step-f-${erste.id}`);
+  if (QUIZ_CFG.timerAufgabe > 0) startAufgabeTimer(erste.id, QUIZ_CFG.timerAufgabe);
+}
+
+function nextFrage(absIdx, frageIdx) {
+  clearAufgabeTimer();
+  if (isLast(absIdx, frageIdx)) {
+    submitQuiz();
+    return;
+  }
+  let nextAbs = absIdx, nextFrage = frageIdx + 1;
+  if (nextFrage >= QUIZ_CFG.abschnitte[absIdx].fragen.length) {
+    nextAbs++;
+    goToStep(`step-abs-intro-${nextAbs}`);
+    return;
+  }
+  const naechste = QUIZ_CFG.abschnitte[nextAbs].fragen[nextFrage];
+  goToStep(`step-f-${naechste.id}`);
+  if (QUIZ_CFG.timerAufgabe > 0) startAufgabeTimer(naechste.id, QUIZ_CFG.timerAufgabe);
+}
+
+// ════════════════════════════════════════════════════════════
+//  TIMER
+// ════════════════════════════════════════════════════════════
+function startGesamtTimer(sekunden) {
+  let verbleibend = sekunden;
+  const box = document.getElementById('timer-box');
+  box.style.display = 'block';
+  updateTimerDisplay(box, verbleibend);
+
+  state.timerGesamtLaeuft = setInterval(() => {
+    verbleibend--;
+    updateTimerDisplay(box, verbleibend);
+    if (verbleibend <= 60) box.classList.add('timer-warn');
+    if (verbleibend <= 0) {
+      clearInterval(state.timerGesamtLaeuft);
+      state.zeitAbgelaufen = true;
+      submitQuiz(true);
+    }
+  }, 1000);
+}
+
+function startAufgabeTimer(fid, sekunden) {
+  let verbleibend = sekunden;
+  const el = document.getElementById(`atimer-${fid}`);
+  if (!el) return;
+  updateAufgabeTimerDisplay(el, verbleibend);
+
+  state.timerAufgabeLaeuft = setInterval(() => {
+    verbleibend--;
+    updateAufgabeTimerDisplay(el, verbleibend);
+    if (verbleibend <= 0) {
+      clearAufgabeTimer();
+      state.aufgabeTimeout[fid] = true;
+      // Auto-weiter
+      const stepEl = document.getElementById(`step-f-${fid}`);
+      if (stepEl) {
+        const absIdx = parseInt(stepEl.dataset.absIdx);
+        const frageIdx = parseInt(stepEl.dataset.frageIdx);
+        nextFrage(absIdx, frageIdx);
+      }
+    }
+  }, 1000);
+}
+
+function clearAufgabeTimer() {
+  if (state.timerAufgabeLaeuft) { clearInterval(state.timerAufgabeLaeuft); state.timerAufgabeLaeuft = null; }
+}
+
+function updateTimerDisplay(el, sek) {
+  const m = Math.floor(sek / 60), s = sek % 60;
+  el.textContent = `⏱ ${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+function updateAufgabeTimerDisplay(el, sek) {
+  el.textContent = `⏳ ${sek}s`;
+  el.style.color = sek <= 10 ? '#c62828' : '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  JOKER-SYSTEM
+// ════════════════════════════════════════════════════════════
+function activateJoker(typ) {
+  if (state.aktJoker === typ) {
+    state.aktJoker = null;
+  } else {
+    if (typ === 'blitz' && state.jokerBlitz <= 0) return;
+    if (typ === 'schwur' && state.jokerSchwur <= 0) return;
+    state.aktJoker = typ;
+  }
+  updateJokerUI();
+}
+
+function updateJokerUI() {
+  const bEl = document.getElementById('blitz-box');
+  const sEl = document.getElementById('schwur-box');
+  if (!bEl) return;
+  bEl.innerHTML = `⚡ ${state.jokerBlitz}`;
+  sEl.innerHTML = `🤞 ${state.jokerSchwur}`;
+  bEl.className = state.aktJoker === 'blitz' ? 'joker-active' : (state.jokerBlitz <= 0 ? 'joker-used' : '');
+  sEl.className = state.aktJoker === 'schwur' ? 'joker-active' : (state.jokerSchwur <= 0 ? 'joker-used' : '');
+}
+
+function handleJokerClick(fid, optIdx, isMulti) {
+  if (!state.aktJoker || !QUIZ_CFG.jokerAktiv) return false;
+  const frage = findFrage(fid);
+  if (!frage || !frage.optionen) return false;
+
+  const opt = frage.optionen[optIdx];
+  const jokerTyp = state.aktJoker;
+  state.aktJoker = null;
+
+  if (jokerTyp === 'blitz') {
+    state.jokerBlitz--;
+    const label = document.getElementById(`opt-${fid}-${optIdx}`);
+    if (opt.korrekt) {
+      if (label) label.classList.add('joker-right');
+      if (!isMulti) state.antworten[fid] = optIdx;
+      else {
+        if (!state.antworten[fid]) state.antworten[fid] = [];
+        if (!state.antworten[fid].includes(optIdx)) state.antworten[fid].push(optIdx);
+      }
+      state.jokerLog.push({ fid, optIdx, typ: 'blitz', ergebnis: 'richtig' });
+    } else {
+      if (label) { label.classList.add('joker-wrong'); const inp = label.querySelector('input'); if(inp) inp.disabled = true; }
+      state.jokerLog.push({ fid, optIdx, typ: 'blitz', ergebnis: 'falsch' });
+    }
+    enableNextBtn(fid);
+  } else if (jokerTyp === 'schwur') {
+    // Prüfe ob schon blitz benutzt
+    const blitzGenutzt = state.jokerLog.some(j => j.fid === fid && j.typ === 'blitz');
+    if (blitzGenutzt) { updateJokerUI(); return false; }
+
+    state.jokerSchwur--;
+    // Alle anderen sperren
+    frage.optionen.forEach((o, i) => {
+      if (i !== optIdx) {
+        const lbl = document.getElementById(`opt-${fid}-${i}`);
+        if (lbl) { lbl.classList.add('joker-locked'); const inp = lbl.querySelector('input'); if(inp) inp.disabled = true; }
+      }
+    });
+    const label = document.getElementById(`opt-${fid}-${optIdx}`);
+    if (label) label.classList.add('joker-sworn');
+    if (!isMulti) state.antworten[fid] = optIdx;
+    else {
+      if (!state.antworten[fid]) state.antworten[fid] = [];
+      if (!state.antworten[fid].includes(optIdx)) state.antworten[fid].push(optIdx);
+    }
+    state.jokerLog.push({ fid, optIdx, typ: 'schwur', korrekt: opt.korrekt });
+    enableNextBtn(fid);
+  }
+
+  updateJokerUI();
+  return true;
+}
+
+function findFrage(fid) {
+  for (const abs of QUIZ_CFG.abschnitte) {
+    const f = abs.fragen.find(f => f.id === fid);
+    if (f) return f;
+  }
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════
+//  AUSWERTUNG & EINREICHUNG
+// ════════════════════════════════════════════════════════════
+function submitQuiz(timeout = false) {
+  if (state.abgegeben) return;
+  state.abgegeben = true;
+
+  clearInterval(state.timerGesamtLaeuft);
+  clearAufgabeTimer();
+  document.getElementById('timer-box').style.display = 'none';
+  document.getElementById('joker-container').style.display = 'none';
+
+  goToStep('step-result');
+
+  const auswertung = berechnePunkte(timeout);
+  setTimeout(() => zeigeErgebnis(auswertung), 1200);
+
+  sendeGoogleForm(auswertung, timeout);
+
+  const key = QUIZ_CFG.id + '_' + QUIZ_CFG.klasse;
+  localStorage.setItem('quiz_done_' + key, '1');
+}
+
+function berechnePunkte(timeout) {
+  let maxBE = 0, erreichtBE = 0;
+  const details = [];
+  const jokerBoni = {};
+
+  // Joker-Bonus/-Malus berechnen
+  state.jokerLog.forEach(j => {
+    if (j.typ === 'schwur') {
+      jokerBoni[j.fid] = j.korrekt ? 2 : -1;
+    }
+  });
+
+  QUIZ_CFG.abschnitte.forEach(abs => {
+    abs.fragen.forEach(frage => {
+      const fid = frage.id;
+      const ant = state.antworten[fid];
+      const istTimeout = state.aufgabeTimeout[fid] && !ant;
+
+      let maxF = 0, erF = 0, korrekt = false, detail = { fid, text: frage.text, typ: frage.typ, timeout: istTimeout };
+
+      if (frage.typ === 'wahr_falsch') {
+        maxF = 1;
+        korrekt = ant === frage.loesung;
+        erF = korrekt ? 1 : 0;
+        detail.loesung = frage.loesung;
+        detail.antwort = ant || (istTimeout ? 'TIMEOUT' : 'Keine Antwort');
+        detail.korrekt = korrekt;
+
+      } else if (frage.typ === 'multiple_choice_single') {
+        maxF = 1;
+        const korrOpt = frage.optionen.findIndex(o => o.korrekt);
+        korrekt = ant === korrOpt;
+        erF = korrekt ? 1 : 0;
+        detail.loesung = frage.optionen[korrOpt]?.text || '';
+        detail.antwort = (ant !== undefined && ant !== null) ? (frage.optionen[ant]?.text || '') : (istTimeout ? 'TIMEOUT' : 'Keine Antwort');
+        detail.korrekt = korrekt;
+
+      } else if (frage.typ === 'multiple_choice_multi') {
+        const korrekte = frage.optionen.map((o,i) => o.korrekt ? i : -1).filter(i => i >= 0);
+        maxF = korrekte.length;
+        const gewaehlte = Array.isArray(ant) ? ant : [];
+        let pkt = 0;
+        gewaehlte.forEach(i => { if (korrekte.includes(i)) pkt++; else pkt--; });
+        erF = Math.max(0, pkt);
+
+        // Joker Schwur Bonus
+        if (jokerBoni[fid] !== undefined) erF = Math.max(0, erF + jokerBoni[fid]);
+
+        detail.loesung = korrekte.map(i => frage.optionen[i].text).join(', ');
+        detail.antwort = gewaehlte.length ? gewaehlte.map(i => frage.optionen[i]?.text || '').join(', ') : (istTimeout ? 'TIMEOUT' : 'Keine Antwort');
+        detail.korrekt = erF === maxF;
+
+      } else if (frage.typ === 'kurzantwort') {
+        maxF = 1;
+        const loesungen = [frage.loesung, ...(frage.alternativloesungen || [])].map(l => l.toLowerCase().trim());
+        const gegeben = (ant || '').toLowerCase().trim();
+        korrekt = loesungen.includes(gegeben);
+        erF = korrekt ? 1 : 0;
+        detail.loesung = frage.loesung;
+        detail.antwort = ant || (istTimeout ? 'TIMEOUT' : 'Keine Antwort');
+        detail.korrekt = korrekt;
+
+      } else if (frage.typ === 'freitext') {
+        maxF = frage.maxBE || 0;
+        erF = 0; // Lehrer bewertet
+        detail.antwort = ant || '';
+        detail.musterloesung = frage.musterloesung || '';
+        detail.korrekt = null; // unbewertet
+      }
+
+      maxBE += maxF;
+      erreichtBE += erF;
+      detail.maxF = maxF;
+      detail.erF = erF;
+      details.push(detail);
+    });
+  });
+
+  const hatFreitext = QUIZ_CFG.abschnitte.some(abs => abs.fragen.some(f => f.typ === 'freitext'));
+
+  const prozent = maxBE > 0 ? Math.round(erreichtBE / maxBE * 100) : 0;
+  const note = hatFreitext ? null : getNote(prozent, QUIZ_CFG.stufe);
+
+  // Freischuss
+  let noteFreischuss = null;
+  if (!hatFreitext && QUIZ_CFG.freischussBE > 0) {
+    const korrigiertBE = Math.min(maxBE, erreichtBE + QUIZ_CFG.freischussBE);
+    const korrigiertProzent = maxBE > 0 ? Math.round(korrigiertBE / maxBE * 100) : 0;
+    noteFreischuss = getNote(korrigiertProzent, QUIZ_CFG.stufe);
+  }
+
+  return { maxBE, erreichtBE, prozent, note, noteFreischuss, details, jokerBoni, hatFreitext };
+}
+
+function zeigeErgebnis(a) {
+  document.getElementById('result-loading').style.display = 'none';
+  const content = document.getElementById('result-content');
+  content.style.display = 'block';
+
+  // Score
+  if (a.hatFreitext) {
+    document.getElementById('result-score').innerHTML =
+      `<div class="score-num">${a.erreichtBE} / ${a.maxBE} Punkte*</div>
+       <div class="score-pct">* ohne die noch nicht bewerteten Freitextaufgaben</div>`;
+  } else {
+    document.getElementById('result-score').innerHTML =
+      `<div class="score-num">${a.erreichtBE} / ${a.maxBE} Punkte</div>
+       <div class="score-pct">${a.prozent}%</div>`;
+  }
+
+  // Note
+  if (a.hatFreitext) {
+    document.getElementById('result-note').innerHTML =
+      `<div class="note-pending">📝 Deine Note wird angezeigt, sobald dein Lehrer die Freitextaufgabe(n) bewertet hat.</div>`;
+  } else {
+    const noteLabel = QUIZ_CFG.stufe === 'ober' ? `${a.note} Punkte` : `Note ${a.note}`;
+    document.getElementById('result-note').innerHTML = `<div class="note-display">${noteLabel}</div>`;
+
+    // Freischuss
+    if (a.noteFreischuss !== null) {
+      const fsLabel = QUIZ_CFG.stufe === 'ober' ? `${a.noteFreischuss} Punkte` : `Note ${a.noteFreischuss}`;
+      document.getElementById('result-freischuss').innerHTML =
+        `<div class="freischuss-hint">Mit Freischuss (+${QUIZ_CFG.freischussBE} BE): <strong>${fsLabel}</strong></div>`;
+    }
+  }
+
+  // Meme/Bild je Note (nur wenn Note schon feststeht)
+  document.getElementById('result-meme').innerHTML = a.hatFreitext ? '' : getMemeHTML(a.note, QUIZ_CFG.stufe, QUIZ_CFG.design);
+
+  // Auflösung
+  const aufEl = document.getElementById('result-aufloesung');
+  aufEl.innerHTML = '';
+  a.details.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'aufloesungs-item ' + (d.korrekt === true ? 'item-richtig' : d.korrekt === false ? 'item-falsch' : 'item-manuell');
+    let html = `<div class="item-frage">${esc(d.text)}</div>`;
+
+    if (d.typ === 'freitext') {
+      html += `<div class="item-antwort">Deine Antwort: ${esc(d.antwort) || '<em>Keine Antwort</em>'}</div>`;
+      html += `<div class="item-muster"><strong>Musterlösung:</strong> ${esc(d.musterloesung)}</div>`;
+      html += `<div class="item-info">📝 Wird vom Lehrer bewertet (max. ${d.maxF} Punkte)</div>`;
+    } else {
+      const symbol = d.korrekt ? '✓' : (d.timeout ? '⏱' : '✗');
+      html += `<div class="item-antwort">${symbol} Deine Antwort: <strong>${esc(d.antwort)}</strong></div>`;
+      if (!d.korrekt) html += `<div class="item-loesung">Richtig wäre: <strong>${esc(d.loesung)}</strong></div>`;
+      html += `<div class="item-punkte">${d.erF} / ${d.maxF} Punkte${d.timeout ? ' (Timeout)' : ''}</div>`;
+    }
+    div.innerHTML = html;
+    aufEl.appendChild(div);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  GOOGLE FORMS EINREICHEN
+// ════════════════════════════════════════════════════════════
+function sendeGoogleForm(auswertung, timeout) {
+  const f = QUIZ_CFG.googleForm;
+  if (!f || !f.url || f.url.includes('XXXXX')) return;
+
+  let detailText = '';
+  auswertung.details.forEach(d => {
+    if (d.typ === 'freitext') {
+      detailText += `[FREITEXT ${d.fid}] ${d.antwort}\n`;
+    } else {
+      detailText += `[${d.korrekt ? 'OK' : 'X'} ${d.fid}] Antwort: ${d.antwort} | Richtig: ${d.loesung || '-'} | ${d.erF}/${d.maxF}P\n`;
+    }
+  });
+
+  const jokerText = state.jokerLog.map(j => `${j.typ}:${j.fid}:${j.ergebnis || (j.korrekt ? 'richtig' : 'falsch')}`).join('; ');
+
+  const felder = {
+    [f.felder.name]: state.name,
+    [f.felder.klasse]: QUIZ_CFG.klasse,
+    [f.felder.fach]: QUIZ_CFG.fach,
+    [f.felder.quizId]: QUIZ_CFG.id,
+    [f.felder.quizTitel]: QUIZ_CFG.titel,
+    [f.felder.stimmung]: state.stimmung,
+    [f.felder.punkte]: String(auswertung.erreichtBE),
+    [f.felder.maxPunkte]: String(auswertung.maxBE),
+    [f.felder.note]: auswertung.hatFreitext ? `ausstehend:${QUIZ_CFG.stufe}` : String(auswertung.note),
+    [f.felder.details]: detailText.slice(0, 8000),
+    [f.felder.tabFlags]: `Wechsel:${state.tabWechsel}|Lang:${state.tabWechselLang}|FS:${state.fullscreenVerlassen}`,
+    [f.felder.jokerDetails]: jokerText || 'keine',
+    [f.felder.timeout]: timeout ? 'JA' : 'Nein'
+  };
+
+  let iframe = document.getElementById('gf-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'gf-iframe'; iframe.name = 'gf-iframe'; iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+  }
+
+  const form = document.createElement('form');
+  form.action = f.url; form.method = 'POST'; form.target = 'gf-iframe';
+  Object.entries(felder).forEach(([name, val]) => {
+    const input = document.createElement('input');
+    input.type = 'hidden'; input.name = name; input.value = val;
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
+  setTimeout(() => document.body.removeChild(form), 2000);
+}
+
+// ════════════════════════════════════════════════════════════
+//  HILFSFUNKTIONEN
+// ════════════════════════════════════════════════════════════
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getMemeHTML(note, stufe, design) {
+  const gut = stufe === 'ober' ? note >= 10 : note <= 2;
+  const ok = stufe === 'ober' ? note >= 6 : note <= 4;
+  if (design === 'comic') {
+    if (gut) return '<div class="meme-comic gut">💥 MEGA! 💥</div>';
+    if (ok) return '<div class="meme-comic ok">👍 Gut gemacht!</div>';
+    return '<div class="meme-comic schlecht">💪 Weiter üben!</div>';
+  }
+  if (design === 'study') {
+    if (gut) return '<div class="meme-study">🌟 Hervorragend! Dein Einsatz zahlt sich aus.</div>';
+    if (ok) return '<div class="meme-study">📚 Solide! Mit etwas mehr Übung klappt es noch besser.</div>';
+    return '<div class="meme-study">🔄 Nicht aufgeben – Wiederholung ist der Schlüssel!</div>';
+  }
+  // apple
+  if (gut) return '<div class="meme-apple">Ausgezeichnet ✦</div>';
+  if (ok) return '<div class="meme-apple">Gut gemacht</div>';
+  return '<div class="meme-apple">Weiter so</div>';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Meine Ergebnisse</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; min-height: 100vh; }
+
+.wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; }
+
+/* ── Header ── */
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.top-bar h1 { font-size: 1.5em; font-weight: 700; letter-spacing: -0.02em; }
+.top-bar button { padding: 8px 16px; border: none; background: #f0f0f0; border-radius: 8px; font-size: 0.82em; cursor: pointer; }
+
+/* ── Karten ── */
+.card { background: white; border-radius: 16px; padding: 22px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.card-title { font-size: 0.85em; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; }
+
+/* ── Login ── */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg,#f5f5f7 0%,#e8e8f0 100%); }
+.login-card { background: white; border-radius: 20px; padding: 36px 28px; max-width: 360px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.09); }
+.login-card h1 { font-size: 1.6em; font-weight: 700; margin-bottom: 6px; letter-spacing:-0.02em; }
+.login-card p { color: #888; font-size: 0.88em; margin-bottom: 24px; }
+label { display: block; font-size: 0.8em; font-weight: 600; color: #555; margin-bottom: 6px; }
+select, input[type=text] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 0.95em; margin-bottom: 14px; font-family: inherit; }
+select:focus, input:focus { outline: none; border-color: #0071e3; }
+.btn-login { width: 100%; padding: 14px; background: #0071e3; color: white; border: none; border-radius: 12px; font-size: 1em; font-weight: 700; cursor: pointer; }
+.btn-login:hover { background: #0077ed; }
+.btn-login:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Profil-Header ── */
+.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg,#0071e3,#34aadc); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.4em; font-weight: 700; flex-shrink: 0; }
+.profile-name { font-size: 1.3em; font-weight: 700; }
+.profile-sub { font-size: 0.82em; color: #888; }
+
+/* ── Statistiken ── */
+.stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.stat-box { background: #f5f5f7; border-radius: 12px; padding: 14px; text-align: center; }
+.stat-val { font-size: 1.7em; font-weight: 700; color: #0071e3; }
+.stat-lbl { font-size: 0.72em; color: #888; margin-top: 2px; }
+
+/* ── Verlaufsgraph ── */
+.graph-wrap { overflow-x: auto; padding-bottom: 4px; }
+.graph { display: flex; align-items: flex-end; gap: 6px; height: 100px; min-width: 100%; }
+.graph-bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 28px; }
+.graph-bar { width: 100%; border-radius: 4px 4px 0 0; transition: opacity 0.2s; cursor: default; }
+.graph-label { font-size: 0.6em; color: #888; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40px; }
+.graph-pct { font-size: 0.65em; font-weight: 600; color: #555; }
+
+/* ── Quiz-Liste ── */
+.quiz-item { border: 1px solid #f0f0f0; border-radius: 12px; overflow: hidden; margin-bottom: 10px; }
+.quiz-item-header { display: flex; align-items: center; padding: 14px 16px; cursor: pointer; gap: 12px; }
+.quiz-item-header:hover { background: #fafafa; }
+.quiz-date { font-size: 0.75em; color: #aaa; white-space: nowrap; }
+.quiz-title-text { flex: 1; font-weight: 600; font-size: 0.9em; }
+.quiz-note { font-weight: 700; font-size: 1em; }
+.quiz-pct { font-size: 0.8em; color: #888; }
+.quiz-chevron { color: #bbb; font-size: 0.8em; transition: transform 0.2s; }
+.quiz-item.open .quiz-chevron { transform: rotate(90deg); }
+.quiz-detail { display: none; border-top: 1px solid #f0f0f0; padding: 14px 16px; font-size: 0.83em; line-height: 1.6; }
+.quiz-item.open .quiz-detail { display: block; }
+.detail-aufgabe { padding: 8px 0; border-bottom: 1px solid #f8f8f8; }
+.detail-aufgabe:last-child { border-bottom: none; }
+.da-text { font-weight: 600; margin-bottom: 3px; color: #333; }
+.da-richtig { color: #2d6a4f; }
+.da-falsch { color: #c62828; }
+.da-manuell { color: #e65100; }
+.da-pkt { font-size: 0.85em; color: #888; margin-top: 2px; }
+
+/* ── Leerer Zustand ── */
+.empty { text-align: center; padding: 40px 20px; color: #aaa; }
+.empty .emoji { font-size: 3em; margin-bottom: 12px; }
+.empty p { font-size: 0.9em; }
+
+/* ── Fehler ── */
+.error-box { background: #fff0f0; border: 1px solid #ffcdd2; color: #c62828; padding: 14px; border-radius: 10px; font-size: 0.85em; margin-bottom: 16px; }
+
+/* ── Loading ── */
+.loading { text-align: center; padding: 40px; color: #aaa; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <h1>📊 Meine Ergebnisse</h1>
+    <p>Sieh dir deinen persönlichen Lernfortschritt an.</p>
+
+    <label>Klasse</label>
+    <select id="login-klasse" onchange="onKlasseSelect()">
+      <option value="">— Klasse wählen —</option>
+    </select>
+
+    <label>Fach</label>
+    <select id="login-fach" onchange="updateSchuelerDropdown()">
+      <option value="">— Fach wählen —</option>
+    </select>
+
+    <label>Dein Name</label>
+    <select id="login-name" onchange="checkLoginReady()">
+      <option value="">— Name wählen —</option>
+    </select>
+
+    <button class="btn-login" id="btn-login" disabled onclick="login()">Weiter →</button>
+    <div id="login-error" class="error-box" style="display:none;margin-top:14px;"></div>
+    <button onclick="gasUrlEinstellen()" style="width:100%;margin-top:12px;padding:10px;border:none;background:none;color:#aaa;font-size:0.78em;cursor:pointer;">⚙ Server-Verbindung einrichten</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard-screen" style="display:none;">
+  <div class="wrap">
+    <div class="top-bar">
+      <h1>Meine Ergebnisse</h1>
+      <button onclick="logout()">← Zurück</button>
+    </div>
+
+    <div id="dash-content">
+      <div class="loading">Daten werden geladen…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Konfiguration ────────────────────────────────────────────
+// GAS_URL aus URL-Parameter oder localStorage laden
+const params = new URLSearchParams(window.location.search);
+let GAS_URL = params.get('gas') || localStorage.getItem('dash-gas-url') || localStorage.getItem('admin-gas-url') || '';
+
+let klassenDaten = [];
+let aktName = '', aktKlasse = '', aktFach = '';
+
+// ── Init ─────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  await ladeKlassen();
+
+  // Gespeicherte Session wiederherstellen
+  const saved = JSON.parse(localStorage.getItem('dash-session') || 'null');
+  if (saved) {
+    aktName = saved.name; aktKlasse = saved.klasse; aktFach = saved.fach;
+    zeigeLogin(false);
+    ladeDashboard();
+  }
+});
+
+// ── GAS-URL einrichten ────────────────────────────────────────
+function gasUrlEinstellen() {
+  const neu = prompt('Adresse der Quiz-Server-Verbindung (Google Apps Script URL):', GAS_URL || '');
+  if (neu === null) return;
+  GAS_URL = neu.trim();
+  localStorage.setItem('dash-gas-url', GAS_URL);
+  document.getElementById('login-error').style.display = 'none';
+  ladeKlassen();
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function gasGet(action, extraParams = {}) {
+  if (!GAS_URL) return null;
+  const url = new URL(GAS_URL);
+  url.searchParams.set('action', action);
+  Object.entries(extraParams).forEach(([k,v]) => url.searchParams.set(k, v));
+  try {
+    const res = await fetch(url.toString());
+    return await res.json();
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── Klassen laden ─────────────────────────────────────────────
+async function ladeKlassen() {
+  const errEl = document.getElementById('login-error');
+  if (!GAS_URL) {
+    errEl.textContent = 'Keine Verbindung zum Server eingerichtet. Bitte unten "Server-Verbindung einrichten" antippen.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const data = await gasGet('getClasses');
+  klassenDaten = Array.isArray(data) ? data : [];
+
+  const sel = document.getElementById('login-klasse');
+  sel.innerHTML = '<option value="">— Klasse wählen —</option>';
+
+  if (!klassenDaten.length) {
+    errEl.textContent = 'Keine Klassen gefunden. Bitte den Lehrer bitten, die Klasse im Lehrer-Dashboard anzulegen, oder die Server-Verbindung prüfen.';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const klassenSet = [...new Set(klassenDaten.map(k => k['Klasse']))].sort();
+  klassenSet.forEach(k => {
+    const opt = document.createElement('option');
+    opt.value = k; opt.textContent = k; sel.appendChild(opt);
+  });
+}
+
+function onKlasseSelect() {
+  const klasse = document.getElementById('login-klasse').value;
+  const fachSel = document.getElementById('login-fach');
+  fachSel.innerHTML = '<option value="">— Fach wählen —</option>';
+  document.getElementById('login-name').innerHTML = '<option value="">— Name wählen —</option>';
+  document.getElementById('btn-login').disabled = true;
+
+  const faecher = [...new Set(klassenDaten.filter(k => k['Klasse'] === klasse).map(k => k['Fach']))].sort();
+  faecher.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f; opt.textContent = f; fachSel.appendChild(opt);
+  });
+}
+
+async function updateSchuelerDropdown() {
+  const klasse = document.getElementById('login-klasse').value;
+  const fach = document.getElementById('login-fach').value;
+  if (!klasse || !fach) return;
+
+  const nameSel = document.getElementById('login-name');
+  nameSel.innerHTML = '<option value="">Wird geladen…</option>';
+
+  const schueler = await gasGet('getStudents', { klasse });
+  nameSel.innerHTML = '<option value="">— Name wählen —</option>';
+  (Array.isArray(schueler) ? schueler : []).sort().forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n; nameSel.appendChild(opt);
+  });
+  checkLoginReady();
+}
+
+function checkLoginReady() {
+  const ok = document.getElementById('login-klasse').value &&
+             document.getElementById('login-fach').value &&
+             document.getElementById('login-name').value;
+  document.getElementById('btn-login').disabled = !ok;
+}
+
+function login() {
+  aktName = document.getElementById('login-name').value;
+  aktKlasse = document.getElementById('login-klasse').value;
+  aktFach = document.getElementById('login-fach').value;
+  localStorage.setItem('dash-session', JSON.stringify({ name: aktName, klasse: aktKlasse, fach: aktFach }));
+  zeigeLogin(false);
+  ladeDashboard();
+}
+
+function logout() {
+  localStorage.removeItem('dash-session');
+  zeigeLogin(true);
+}
+
+function zeigeLogin(show) {
+  document.getElementById('login-screen').style.display = show ? 'flex' : 'none';
+  document.getElementById('dashboard-screen').style.display = show ? 'none' : 'block';
+}
+
+// ── Dashboard laden ──────────────────────────────────────────
+async function ladeDashboard() {
+  const container = document.getElementById('dash-content');
+  container.innerHTML = '<div class="loading">Daten werden geladen…</div>';
+
+  const ergebnisse = await gasGet('getStudent', { name: aktName, klasse: aktKlasse });
+  if (!ergebnisse) {
+    container.innerHTML = '<div class="error-box">Verbindungsfehler. Bitte neu versuchen.</div>';
+    return;
+  }
+
+  const data = Array.isArray(ergebnisse) ? ergebnisse.filter(r => !aktFach || r['Fach'] === aktFach) : [];
+  renderDashboard(data);
+}
+
+// ── Dashboard rendern ─────────────────────────────────────────
+function renderDashboard(data) {
+  const container = document.getElementById('dash-content');
+  let html = '';
+
+  // Profil
+  const initial = (aktName || '?').charAt(0).toUpperCase();
+  html += `<div class="card">
+    <div class="profile-header">
+      <div class="avatar">${initial}</div>
+      <div>
+        <div class="profile-name">${esc(aktName)}</div>
+        <div class="profile-sub">${esc(aktKlasse)} · ${esc(aktFach)}</div>
+      </div>
+    </div>
+  </div>`;
+
+  if (!data.length) {
+    html += `<div class="empty"><div class="emoji">📭</div><p>Noch keine Ergebnisse vorhanden.<br>Mach dein erstes Quiz!</p></div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  // Statistiken
+  const pcts = data.map(r => parseFloat(r['Prozent']) || 0);
+  const avg = Math.round(pcts.reduce((s,p) => s+p, 0) / pcts.length);
+  const best = Math.round(Math.max(...pcts));
+  const stufe = data[0]?.['Stufe'] || 'mittel';
+
+  html += `<div class="card">
+    <div class="card-title">Übersicht</div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val">${data.length}</div><div class="stat-lbl">Quizze</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${avg>=80?'#2d6a4f':avg>=60?'#e65100':'#c62828'}">${avg}%</div><div class="stat-lbl">Durchschnitt</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#2d6a4f">${best}%</div><div class="stat-lbl">Bester Wert</div></div>
+    </div>
+  </div>`;
+
+  // Verlaufsgraph
+  const graphData = data.slice(-12);
+  const bars = graphData.map(r => {
+    const pct = parseFloat(r['Prozent']) || 0;
+    const h = Math.round(pct * 80 / 100);
+    const col = pct >= 80 ? '#2d6a4f' : pct >= 60 ? '#f4a261' : '#e63946';
+    const note = r['Note'];
+    const shortTitle = (r['Quiz-Titel'] || '').slice(0, 8);
+    return `<div class="graph-bar-wrap">
+      <div class="graph-pct">${Math.round(pct)}%</div>
+      <div class="graph-bar" style="height:${Math.max(4,h)}px;background:${col};" title="${esc(r['Quiz-Titel']||'')} — ${Math.round(pct)}%"></div>
+      <div class="graph-label">${esc(shortTitle)}</div>
+    </div>`;
+  }).join('');
+
+  html += `<div class="card">
+    <div class="card-title">Verlauf (letzte ${graphData.length} Quizze)</div>
+    <div class="graph-wrap"><div class="graph">${bars}</div></div>
+  </div>`;
+
+  // Alle Quizze
+  html += `<div class="card">
+    <div class="card-title">Alle Ergebnisse</div>`;
+
+  data.slice().reverse().forEach((r, i) => {
+    const pct = Math.round(parseFloat(r['Prozent']) || 0);
+    const note = r['Note'];
+    const col = pct >= 80 ? '#2d6a4f' : pct >= 60 ? '#e65100' : '#c62828';
+    const datum = (r['Zeitstempel'] || '').slice(0, 10);
+
+    // Antwort-Details parsen
+    const details = parseDetails(r['Details'] || '');
+    const detailHtml = details.length ? details.map(d => {
+      let cls = d.korrekt === true ? 'da-richtig' : d.korrekt === false ? 'da-falsch' : 'da-manuell';
+      let sym = d.korrekt === true ? '✓' : d.korrekt === false ? '✗' : '📝';
+      return `<div class="detail-aufgabe">
+        <div class="da-text">${esc(d.frage)}</div>
+        <div class="${cls}">${sym} ${esc(d.antwort)}</div>
+        ${d.richtig && !d.korrekt ? `<div style="font-size:0.82em;color:#2d6a4f;">→ Richtig: ${esc(d.richtig)}</div>` : ''}
+        <div class="da-pkt">${d.punkte}</div>
+      </div>`;
+    }).join('') : `<p style="color:#bbb;font-size:0.85em;">Keine Detaildaten verfügbar.</p>`;
+
+    html += `<div class="quiz-item" id="qi-${i}">
+      <div class="quiz-item-header" onclick="toggleQuizItem(${i})">
+        <div style="flex:1;">
+          <div class="quiz-title-text">${esc(r['Quiz-Titel'] || r['Quiz-ID'])}</div>
+          <div class="quiz-date">${datum}</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="quiz-note" style="color:${col}">${note}</div>
+          <div class="quiz-pct">${pct}%</div>
+        </div>
+        <div class="quiz-chevron">›</div>
+      </div>
+      <div class="quiz-detail">
+        <div style="font-size:0.82em;color:#888;margin-bottom:10px;">${r['Punkte']}/${r['MaxPunkte']} Punkte · Stimmung: ${esc(r['Stimmung']||'–')}</div>
+        ${detailHtml}
+      </div>
+    </div>`;
+  });
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function toggleQuizItem(i) {
+  document.getElementById(`qi-${i}`).classList.toggle('open');
+}
+
+// ── Details-Parser ────────────────────────────────────────────
+function parseDetails(raw) {
+  const result = [];
+  const lines = raw.split('\n');
+  lines.forEach(line => {
+    const m = line.match(/^\[(OK|X)\s+([\w]+)\]\s+Antwort:\s+(.+?)\s+\|\s+Richtig:\s+(.+?)\s+\|(.+)$/);
+    if (m) {
+      result.push({ korrekt: m[1] === 'OK', frage: m[2], antwort: m[3].trim(), richtig: m[4].trim(), punkte: m[5].trim() });
+    }
+    const ft = line.match(/^\[FREITEXT ([\w]+)\] (.+)$/);
+    if (ft) {
+      result.push({ korrekt: null, frage: ft[1], antwort: ft[2].trim(), richtig: '', punkte: 'Lehrer bewertet' });
+    }
+  });
+  return result;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
