@@ -500,11 +500,15 @@ function renderHeatmap() {
   }
 
   // Schüler und Quiz-IDs sammeln
+  // (String(...) wichtig: falls Google Sheets "Quiz-Titel"/"Quiz-ID" als Zahl
+  // interpretiert, würde .slice() weiter unten sonst die ganze Funktion mit
+  // einem TypeError abbrechen — dann bliebe die alte Heatmap stehen und
+  // würde nicht mit neuen Quizzen mitwachsen.)
   const quizMap = {};
   const schuelerSet = new Set(klassenSchueler);
   alleErgebnisse.forEach(r => {
     const qid = r['Quiz-ID'];
-    if (!quizMap[qid]) quizMap[qid] = { titel: r['Quiz-Titel'] || qid };
+    if (!quizMap[qid]) quizMap[qid] = { titel: String(r['Quiz-Titel'] || qid || '') };
     schuelerSet.add(r['Name']);
   });
   const quizIds = Object.keys(quizMap);
@@ -517,7 +521,8 @@ function renderHeatmap() {
 
   let html = '<table class="heatmap-table"><thead><tr><th>Schüler/in</th>';
   quizIds.forEach(qid => {
-    html += `<th title="${escH(quizMap[qid].titel)}">${escH(quizMap[qid].titel.slice(0,18))}${quizMap[qid].titel.length > 18 ? '…' : ''}</th>`;
+    const titel = quizMap[qid].titel;
+    html += `<th title="${escH(titel)}">${escH(titel.slice(0,18))}${titel.length > 18 ? '…' : ''}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -527,13 +532,19 @@ function renderHeatmap() {
       const r = lookup[`${name}|${qid}`];
       if (!r) {
         html += `<td><span class="hm-cell hm-absent">Fehlt</span></td>`;
-      } else {
+        return;
+      }
+      // Pro Zelle abgesichert: ein einzelner kaputter Datensatz (z.B. fehlerhaftes
+      // Freitext-BE-JSON) soll nicht die ganze Heatmap-Anzeige verhindern.
+      try {
         const { pct, note, pending } = auswerten(r);
         const tf = r['TabFlags'] || '';
         const lang = parseInt(tf.match(/Lang:(\d+)/)?.[1] || '0');
         const cls = pending ? 'hm-pending' : (lang > 0 ? 'hm-flag' : `hm-${note}`);
         const label = pending ? '📝 ausstehend' : (lang > 0 ? `⚠ ${note}` : note);
         html += `<td><span class="hm-cell ${cls}" style="cursor:pointer;" onclick="zeigeDetail('${escH(name)}','${escH(qid)}')" title="${pct}%">${label} (${pct}%)</span></td>`;
+      } catch (err) {
+        html += `<td><span class="hm-cell hm-na" title="${escH(err.message)}">⚠ Fehler</span></td>`;
       }
     });
     html += '</tr>';
