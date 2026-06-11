@@ -190,7 +190,7 @@ textarea { resize: vertical; }
 
     <!-- FREITEXT BEWERTEN -->
     <div id="section-freitext" class="section">
-      <div class="section-header"><h2>Freitext-Antworten bewerten</h2></div>
+      <div class="section-header"><h2>Freitext-Antworten bewerten</h2><button class="btn btn-sm btn-outline" onclick="exportFreitext()">⬇ Export für KI-Bewertung</button></div>
       <div class="card">
         <p style="font-size:0.88em;color:#666;margin-bottom:16px;">Hier sehen Sie alle nicht automatisch bewertbaren Freitext-Antworten. Tragen Sie die erreichten Punkte ein und speichern Sie.</p>
         <div id="freitext-liste">
@@ -443,6 +443,25 @@ function freitextFids(r) {
   return [...details.matchAll(/\[FREITEXT (\w+)\]/g)].map(m => m[1]);
 }
 
+// Gruppiert Ergebnisse: Quiz-ID -> { titel, byName: { Name -> [Zeilen, chronologisch sortiert] } }.
+// Mehrfache Versuche derselben Person für dasselbe Quiz landen so als eigene
+// Einträge in byName[name] (statt sich gegenseitig zu überschreiben) und
+// können konsistent in Heatmap und Freitext-Liste als "Versuch N" angezeigt werden.
+function gruppiereNachQuizUndSchueler(ergebnisse) {
+  const groups = {};
+  ergebnisse.forEach(r => {
+    const qid = r['Quiz-ID'];
+    if (!groups[qid]) groups[qid] = { titel: String(r['Quiz-Titel'] || qid || ''), byName: {} };
+    const name = r['Name'];
+    if (!groups[qid].byName[name]) groups[qid].byName[name] = [];
+    groups[qid].byName[name].push(r);
+  });
+  Object.values(groups).forEach(g => {
+    Object.values(g.byName).forEach(arr => arr.sort((a, b) => new Date(a['Zeitstempel']) - new Date(b['Zeitstempel'])));
+  });
+  return groups;
+}
+
 // Liefert { punkte, maxPunkte, pct, note, pending } für ein Ergebnis-Objekt.
 // "pending" = true, solange mindestens eine Freitextaufgabe noch nicht bewertet wurde
 // (Note-Spalte enthält dann "ausstehend:<stufe>").
@@ -499,39 +518,48 @@ function renderHeatmap() {
     return;
   }
 
-  // Schüler und Quiz-IDs sammeln
-  // (String(...) wichtig: falls Google Sheets "Quiz-Titel"/"Quiz-ID" als Zahl
-  // interpretiert, würde .slice() weiter unten sonst die ganze Funktion mit
-  // einem TypeError abbrechen — dann bliebe die alte Heatmap stehen und
-  // würde nicht mit neuen Quizzen mitwachsen.)
-  const quizMap = {};
+  // Gruppierung nach Quiz-ID + Schüler:in (chronologisch). Wird auch von
+  // zeigeDetail() verwendet, um bei mehreren Versuchen den richtigen
+  // herauszugreifen.
+  const groups = gruppiereNachQuizUndSchueler(alleErgebnisse);
+  window._heatmapGroups = groups;
+
   const schuelerSet = new Set(klassenSchueler);
-  alleErgebnisse.forEach(r => {
-    const qid = r['Quiz-ID'];
-    if (!quizMap[qid]) quizMap[qid] = { titel: String(r['Quiz-Titel'] || qid || '') };
-    schuelerSet.add(r['Name']);
-  });
-  const quizIds = Object.keys(quizMap);
+  alleErgebnisse.forEach(r => schuelerSet.add(r['Name']));
   const schueler = [...schuelerSet].sort();
   schuelerNamen = schueler;
 
-  // Lookup
-  const lookup = {};
-  alleErgebnisse.forEach(r => { lookup[`${r['Name']}|${r['Quiz-ID']}`] = r; });
+  // Spalten: pro Quiz-ID so viele Spalten wie der Schüler/die Schülerin mit
+  // den meisten Versuchen für dieses Quiz hat. Normalerweise 1 Spalte pro
+  // Quiz; macht jemand denselben Test mehrfach, wachsen zusätzliche
+  // "Versuch N"-Spalten nur für dieses Quiz mit, statt frühere Versuche
+  // unsichtbar zu überschreiben.
+  const columns = [];
+  Object.entries(groups).forEach(([qid, g]) => {
+    const maxVersuche = Math.max(1, ...Object.values(g.byName).map(a => a.length));
+    for (let i = 0; i < maxVersuche; i++) {
+      columns.push({ qid, titel: g.titel, attempt: i, maxVersuche });
+    }
+  });
 
   let html = '<table class="heatmap-table"><thead><tr><th>Schüler/in</th>';
-  quizIds.forEach(qid => {
-    const titel = quizMap[qid].titel;
-    html += `<th title="${escH(titel)}">${escH(titel.slice(0,18))}${titel.length > 18 ? '…' : ''}</th>`;
+  columns.forEach(col => {
+    const label = col.maxVersuche > 1 ? `${col.titel} (Versuch ${col.attempt + 1})` : col.titel;
+    html += `<th title="${escH(label)}">${escH(label.slice(0,18))}${label.length > 18 ? '…' : ''}</th>`;
   });
   html += '</tr></thead><tbody>';
 
   schueler.forEach(name => {
     html += `<tr><td style="font-weight:600;">${escH(name)}</td>`;
-    quizIds.forEach(qid => {
-      const r = lookup[`${name}|${qid}`];
+    columns.forEach(col => {
+      const versuche = groups[col.qid].byName[name] || [];
+      const r = versuche[col.attempt];
       if (!r) {
-        html += `<td><span class="hm-cell hm-absent">Fehlt</span></td>`;
+        // Erste Spalte eines Quiz fehlt = Schüler:in hat (noch) nicht teilgenommen.
+        // Weitere "Versuch N"-Spalten ohne Eintrag = einfach kein weiterer Versuch nötig.
+        html += col.attempt === 0
+          ? `<td><span class="hm-cell hm-absent">Fehlt</span></td>`
+          : `<td><span class="hm-cell" style="opacity:0.35;">–</span></td>`;
         return;
       }
       // Pro Zelle abgesichert: ein einzelner kaputter Datensatz (z.B. fehlerhaftes
@@ -542,7 +570,7 @@ function renderHeatmap() {
         const lang = parseInt(tf.match(/Lang:(\d+)/)?.[1] || '0');
         const cls = pending ? 'hm-pending' : (lang > 0 ? 'hm-flag' : `hm-${note}`);
         const label = pending ? '📝 ausstehend' : (lang > 0 ? `⚠ ${note}` : note);
-        html += `<td><span class="hm-cell ${cls}" style="cursor:pointer;" onclick="zeigeDetail('${escH(name)}','${escH(qid)}')" title="${pct}%">${label} (${pct}%)</span></td>`;
+        html += `<td><span class="hm-cell ${cls}" style="cursor:pointer;" onclick="zeigeDetail('${escH(name)}','${escH(col.qid)}',${col.attempt})" title="${pct}%">${label} (${pct}%)</span></td>`;
       } catch (err) {
         html += `<td><span class="hm-cell hm-na" title="${escH(err.message)}">⚠ Fehler</span></td>`;
       }
@@ -554,11 +582,13 @@ function renderHeatmap() {
   container.innerHTML = html;
 }
 
-function zeigeDetail(name, quizId) {
-  const r = alleErgebnisse.find(e => e['Name'] === name && e['Quiz-ID'] === quizId);
+function zeigeDetail(name, quizId, attempt) {
+  const versuche = (window._heatmapGroups[quizId] && window._heatmapGroups[quizId].byName[name]) || [];
+  const r = versuche[attempt || 0];
   if (!r) return;
 
-  document.getElementById('detail-titel').textContent = `${name} — ${r['Quiz-Titel'] || quizId}`;
+  const versuchInfo = versuche.length > 1 ? ` (Versuch ${(attempt || 0) + 1} von ${versuche.length})` : '';
+  document.getElementById('detail-titel').textContent = `${name} — ${r['Quiz-Titel'] || quizId}${versuchInfo}`;
   const panel = document.getElementById('detail-panel');
   panel.style.display = 'block';
 
@@ -659,11 +689,25 @@ function zeigeSchuelerDetail(name) {
 }
 
 // ── Freitext-Liste ───────────────────────────────────────────
+// Farbakzent pro Abgabe (Name+Zeitstempel) — wechselt zyklisch, damit
+// aufeinanderfolgende Abgaben (egal ob gleiche oder andere Person) optisch
+// klar getrennt sind.
+const FT_PALETTE = ['#4a90d9', '#e07a5f', '#43aa8b', '#f4a261', '#9b5de5', '#2a9d8f', '#e76f51', '#577590'];
+
 function renderFreitextListe() {
   const container = document.getElementById('freitext-liste');
+  const groups = gruppiereNachQuizUndSchueler(alleErgebnisse);
   const freitextEntries = [];
 
-  alleErgebnisse.forEach(r => {
+  // Nach Name, dann Zeitstempel sortieren, damit alle Antworten einer Abgabe
+  // zusammenstehen und gleichnamige Abgaben verschiedener Personen nicht
+  // durcheinandergeraten.
+  const sortiert = [...alleErgebnisse].sort((a, b) => {
+    const n = String(a['Name'] || '').localeCompare(String(b['Name'] || ''));
+    return n !== 0 ? n : new Date(a['Zeitstempel']) - new Date(b['Zeitstempel']);
+  });
+
+  sortiert.forEach(r => {
     const details = r['Details'] || '';
     const matches = details.matchAll(/\[FREITEXT ([\w]+)\] (.+?)(?=\n\[|$)/gs);
     const beMap = parseFreitextMap(r['Freitext-BE']);
@@ -673,22 +717,31 @@ function renderFreitextListe() {
       beMap[fids[0]] = beMap['_legacy'];
       notizMap[fids[0]] = notizMap['_legacy'];
     }
+    const versuche = (groups[r['Quiz-ID']] && groups[r['Quiz-ID']].byName[r['Name']]) || [r];
+    const versuchLabel = versuche.length > 1 ? ` · Versuch ${versuche.indexOf(r) + 1}/${versuche.length}` : '';
     for (const m of matches) {
       freitextEntries.push({
         name: r['Name'], quizId: r['Quiz-ID'], titel: r['Quiz-Titel'], fid: m[1], antwort: m[2].trim(),
-        zeitstempel: r['Zeitstempel'], be: beMap[m[1]], notiz: notizMap[m[1]]
+        zeitstempel: r['Zeitstempel'], be: beMap[m[1]], notiz: notizMap[m[1]], versuchLabel
       });
     }
   });
 
   if (!freitextEntries.length) {
     container.innerHTML = '<p style="color:#888;font-size:0.88em;">Keine offenen Freitext-Antworten.</p>';
+    window._freitextEntries = [];
     return;
   }
 
-  container.innerHTML = freitextEntries.map((e, i) => `
-    <div class="freitext-item">
-      <div class="freitext-frage"><strong>${escH(e.name)}</strong> · ${escH(e.titel || e.quizId)} · Aufgabe ${escH(e.fid)}</div>
+  let colorIdx = -1, lastKey = null;
+  container.innerHTML = freitextEntries.map((e, i) => {
+    const key = e.name + '|' + e.zeitstempel;
+    if (key !== lastKey) { colorIdx = (colorIdx + 1) % FT_PALETTE.length; lastKey = key; }
+    const farbe = FT_PALETTE[colorIdx];
+    const zeit = String(e.zeitstempel || '').slice(0, 16).replace('T', ' ');
+    return `
+    <div class="freitext-item" style="border-left: 5px solid ${farbe};">
+      <div class="freitext-frage"><strong>${escH(e.name)}</strong> · ${escH(e.titel || e.quizId)}${escH(e.versuchLabel)} · Aufgabe ${escH(e.fid)} · <span style="color:#bbb;">${escH(zeit)}</span></div>
       <div class="freitext-antwort">${escH(e.antwort) || '<em style="color:#bbb">Keine Antwort</em>'}</div>
       <div class="freitext-bewertung">
         <label style="margin:0;font-size:0.82em;white-space:nowrap;">Punkte:</label>
@@ -697,9 +750,94 @@ function renderFreitextListe() {
         <button class="btn btn-sm btn-primary" onclick="speichereFreitext(${i})">Speichern</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   window._freitextEntries = freitextEntries;
+}
+
+// ── Export für KI-gestützte Bewertung ─────────────────────────
+// Lädt zu jedem betroffenen Quiz die HTML-Datei (selbe Domain wie admin.html)
+// und liest QUIZ_CFG aus, um Frage-Text, Musterlösung und Klassenstufe zu
+// erhalten. Erzeugt eine Markdown-Datei mit allen offenen/bisherigen
+// Freitext-Antworten je Schüler:in samt Musterlösung und einem fertigen
+// KI-Prompt — der Prompt selbst erscheint NUR in der Exportdatei, nicht im
+// Dashboard.
+async function exportFreitext() {
+  const entries = window._freitextEntries || [];
+  if (!entries.length) {
+    alert('Keine Freitext-Antworten zum Exportieren vorhanden.');
+    return;
+  }
+
+  const quizIds = [...new Set(entries.map(e => e.quizId))];
+  const cfgs = {};
+  for (const qid of quizIds) {
+    try {
+      const res = await fetch(`./quiz-${qid}.html`);
+      if (!res.ok) continue;
+      const txt = await res.text();
+      const m = txt.match(/const QUIZ_CFG = (\{[\s\S]*?\n\});/);
+      if (m) cfgs[qid] = JSON.parse(m[1]);
+    } catch (e) { /* Quiz-Datei nicht erreichbar — Export läuft ohne Frage/Musterlösung weiter */ }
+  }
+
+  function fragenMeta(qid, fid) {
+    const cfg = cfgs[qid];
+    if (!cfg) return null;
+    for (const abs of cfg.abschnitte || []) {
+      const f = (abs.fragen || []).find(fr => fr.id === fid);
+      if (f) return f;
+    }
+    return null;
+  }
+
+  const byName = {};
+  entries.forEach(e => { (byName[e.name] = byName[e.name] || []).push(e); });
+
+  let md = `# Freitext-Antworten — Export zur Bewertung\n\n`;
+  md += `Klasse: ${aktuellKlasse} · Fach: ${aktuellFach} · Erstellt: ${new Date().toLocaleString('de-DE')}\n\n---\n\n`;
+
+  Object.entries(byName).forEach(([name, list]) => {
+    md += `## ${name}\n\n`;
+    list.forEach(e => {
+      const meta = fragenMeta(e.quizId, e.fid);
+      const zeit = String(e.zeitstempel || '').slice(0, 16).replace('T', ' ');
+      md += `### ${e.titel || e.quizId}${e.versuchLabel} — Aufgabe ${e.fid} (${zeit})\n\n`;
+      if (meta) {
+        md += `**Frage:** ${meta.text}\n\n`;
+        md += `**Musterlösung:** ${meta.musterloesung || '–'}\n\n`;
+        md += `**Maximale BE:** ${meta.maxBE ?? '–'}\n\n`;
+      }
+      md += `**Antwort von ${name}:**\n${e.antwort || '(keine Antwort)'}\n\n`;
+      md += `**Bisherige Bewertung:** ${e.be !== undefined ? e.be + ' BE' : '(noch nicht bewertet)'}${e.notiz ? ' — ' + e.notiz : ''}\n\n`;
+      md += `---\n\n`;
+    });
+  });
+
+  const stufen = [...new Set(quizIds.map(qid => cfgs[qid] && cfgs[qid].stufe).filter(Boolean))];
+  const stufeText = stufen.includes('ober') ? '0–15 Punkte (Oberstufen-Notenskala)' : '1–6 (Mittel-/Unterstufen-Notenskala)';
+
+  md += `\n## KI-Prompt zur Bewertung\n\n`;
+  md += `Du bist Lehrkraft für ${aktuellFach} in Klasse ${aktuellKlasse} (Notenskala: ${stufeText}) `;
+  md += `und bewertest die oben aufgeführten Freitext-Antworten.\n\n`;
+  md += `Gehe für JEDE Antwort einzeln vor:\n`;
+  md += `1. Vergleiche die Schülerantwort inhaltlich mit der Musterlösung — welche zentralen Aspekte/Argumente sind enthalten, welche fehlen oder sind unpräzise?\n`;
+  md += `2. Berücksichtige das Niveau der Klassenstufe — erwarte keine wörtliche Übereinstimmung mit der Musterlösung, sondern inhaltliche Richtigkeit und ein dem Niveau angemessenes Verständnis.\n`;
+  md += `3. Schlage eine Punktzahl von 0 bis zur angegebenen maximalen BE vor (auch halbe Punkte möglich).\n`;
+  md += `4. Begründe den Vorschlag in 2–3 Sätzen, wertschätzend und konstruktiv formuliert, sodass die Begründung direkt als Rückmeldung an die Schülerin/den Schüler verwendet werden kann.\n\n`;
+  md += `Gib die Bewertung für jede Antwort in folgendem Format aus:\n\n`;
+  md += `**[Name] – [Quiz] – Aufgabe [ID]:** [Vorschlag] / [Max-BE] BE\nBegründung: ...\n`;
+
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `freitext-export-${aktuellKlasse}-${aktuellFach}-${new Date().toISOString().slice(0,10)}.md`.replace(/[^\w.-]+/g, '_');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function speichereFreitext(idx) {
