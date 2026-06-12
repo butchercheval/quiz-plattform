@@ -112,6 +112,22 @@ textarea { resize: vertical; }
 /* ── Einstellungen GAS URL ── */
 .gas-url-bar { display: flex; gap: 10px; align-items: center; }
 .gas-url-bar input { flex: 1; }
+
+/* ── Druckansicht (Schüler-PDF-Export) ── */
+#print-header { display: none; }
+@media print {
+  body.printing-schueler header,
+  body.printing-schueler .sidebar,
+  body.printing-schueler .section-header,
+  body.printing-schueler #schueler-liste-card { display: none !important; }
+  body.printing-schueler .main-content { padding: 0; }
+  body.printing-schueler #schueler-detail { box-shadow: none; }
+  body.printing-schueler #print-header {
+    display: block; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #1a1a2e;
+  }
+  body.printing-schueler #print-header h2 { font-size: 1.3em; margin-bottom: 4px; }
+  body.printing-schueler #print-header div { font-size: 0.85em; color: #555; }
+}
 </style>
 </head>
 <body>
@@ -145,7 +161,10 @@ textarea { resize: vertical; }
     <div id="section-ergebnisse" class="section active">
       <div class="section-header">
         <h2>Ergebnisse</h2>
-        <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ CSV exportieren</button>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-outline btn-sm" onclick="exportCSV()">⬇ CSV exportieren</button>
+          <button class="btn btn-danger btn-sm" onclick="zuruecksetzenKlasse()">🗑 Klasse zurücksetzen…</button>
+        </div>
       </div>
 
       <div class="stats-grid" id="stats-grid">
@@ -174,7 +193,7 @@ textarea { resize: vertical; }
     <!-- SCHÜLER -->
     <div id="section-schueler" class="section">
       <div class="section-header"><h2>Schülerübersicht</h2></div>
-      <div class="card">
+      <div class="card" id="schueler-liste-card">
         <div class="card-title">Alle Schüler <span id="schueler-anzahl"></span></div>
         <div id="schueler-liste" class="student-list">
           <p style="color:#888;font-size:0.88em;">Klasse wählen und Daten laden.</p>
@@ -182,7 +201,11 @@ textarea { resize: vertical; }
       </div>
       <!-- Schüler-Detail -->
       <div id="schueler-detail" class="card" style="display:none;">
-        <div class="card-title" id="schueler-detail-name"></div>
+        <div class="card-title">
+          <span id="schueler-detail-name"></span>
+          <button class="btn btn-sm btn-outline" onclick="exportSchuelerPDF()">🖨 Als PDF exportieren</button>
+        </div>
+        <div id="print-header"></div>
         <div id="schueler-detail-graph" style="margin-bottom:16px;"></div>
         <div id="schueler-detail-tabelle"></div>
       </div>
@@ -401,6 +424,7 @@ async function ladeDaten() {
 }
 
 function renderAlles() {
+  window._freitextAnsicht = 'aktiv';
   renderStats();
   renderHeatmap();
   renderSchuelerListe();
@@ -510,11 +534,77 @@ function renderStats() {
   document.getElementById('stat-flags').textContent = flags;
 }
 
+// ── Heatmap & Export: gemeinsame Spalten-/CSV-Bausteine ────────
+// Pro Quiz-ID so viele Spalten wie der Schüler/die Schülerin mit den
+// meisten Versuchen für dieses Quiz hat. Normalerweise 1 Spalte pro Quiz;
+// macht jemand denselben Test mehrfach, wachsen zusätzliche "Versuch N"-
+// Spalten nur für dieses Quiz mit, statt frühere Versuche unsichtbar zu
+// überschreiben. Wird von Heatmap, CSV-Export und Notendurchschnitt genutzt.
+function alleHeatmapSpalten(groups) {
+  const columns = [];
+  Object.entries(groups).forEach(([qid, g]) => {
+    const maxVersuche = Math.max(1, ...Object.values(g.byName).map(a => a.length));
+    for (let i = 0; i < maxVersuche; i++) {
+      const label = maxVersuche > 1 ? `${g.titel} (Versuch ${i + 1})` : g.titel;
+      columns.push({ qid, titel: g.titel, attempt: i, maxVersuche, label });
+    }
+  });
+  return columns;
+}
+
+// Vollständige, alphabetisch sortierte Schülerliste: Klassenliste ∪ alle,
+// die mindestens ein Ergebnis abgegeben haben (auch wenn sie z.B. nach
+// Klassenwechsel nicht mehr in klassenSchueler stehen).
+function alleSchuelerNamen() {
+  const set = new Set(klassenSchueler);
+  alleErgebnisse.forEach(r => set.add(r['Name']));
+  return [...set].sort();
+}
+
+// Baut eine Pivot-CSV (Zeilen = Schüler:innen, Spalten = Quiz/Versuch wie in
+// der Heatmap). extraCols = [{label, value(name, cellData)}] für zusätzliche
+// berechnete Spalten (z.B. "Teilnahmen", "Ø Auswahl").
+function buildErgebnisseCSV(columns, extraCols = []) {
+  const groups = gruppiereNachQuizUndSchueler(alleErgebnisse);
+  const schueler = alleSchuelerNamen();
+
+  const headers = ['Name', ...columns.map(c => c.label), ...extraCols.map(c => c.label)];
+  const rows = schueler.map(name => {
+    const cellData = columns.map(col => {
+      const versuche = (groups[col.qid] && groups[col.qid].byName[name]) || [];
+      const r = versuche[col.attempt];
+      if (!r) return { r: null, text: col.attempt === 0 ? 'Fehlt' : '' };
+      const a = auswerten(r);
+      const text = a.pending ? `ausstehend (${a.pct}%)` : `${a.note} (${a.pct}%) — ${a.punkte}/${a.maxPunkte}`;
+      return { r, a, text };
+    });
+    const rowVals = [name, ...cellData.map(c => c.text)];
+    extraCols.forEach(ec => rowVals.push(ec.value(name, cellData)));
+    return rowVals;
+  });
+
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  return [headers.map(esc).join(','), ...rows.map(row => row.map(esc).join(','))].join('\n');
+}
+
+// Startet den Download einer CSV-Datei (mit BOM, damit Excel Umlaute korrekt anzeigt).
+function downloadCSV(csv, filename) {
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Heatmap ──────────────────────────────────────────────────
 function renderHeatmap() {
   const container = document.getElementById('heatmap-container');
   if (!alleErgebnisse.length) {
     container.innerHTML = '<p style="color:#888;font-size:0.88em;padding:20px 0;">Keine Daten für diese Klasse.</p>';
+    window._notenAuswahl = null;
     return;
   }
 
@@ -523,34 +613,204 @@ function renderHeatmap() {
   // herauszugreifen.
   const groups = gruppiereNachQuizUndSchueler(alleErgebnisse);
   window._heatmapGroups = groups;
+  window._heatmapColumns = alleHeatmapSpalten(groups);
+  window._heatmapSchueler = alleSchuelerNamen();
+  schuelerNamen = window._heatmapSchueler;
 
-  const schuelerSet = new Set(klassenSchueler);
-  alleErgebnisse.forEach(r => schuelerSet.add(r['Name']));
-  const schueler = [...schuelerSet].sort();
-  schuelerNamen = schueler;
+  // Notendurchschnitt-Panel ist ein punktuelles Analyse-Werkzeug und wird bei
+  // jedem Neuaufbau der Heatmap (Klassenwechsel/Neuladen) zurückgesetzt.
+  window._notenAuswahl = null;
+  window._quizStufenCache = {};
 
-  // Spalten: pro Quiz-ID so viele Spalten wie der Schüler/die Schülerin mit
-  // den meisten Versuchen für dieses Quiz hat. Normalerweise 1 Spalte pro
-  // Quiz; macht jemand denselben Test mehrfach, wachsen zusätzliche
-  // "Versuch N"-Spalten nur für dieses Quiz mit, statt frühere Versuche
-  // unsichtbar zu überschreiben.
-  const columns = [];
-  Object.entries(groups).forEach(([qid, g]) => {
-    const maxVersuche = Math.max(1, ...Object.values(g.byName).map(a => a.length));
-    for (let i = 0; i < maxVersuche; i++) {
-      columns.push({ qid, titel: g.titel, attempt: i, maxVersuche });
+  renderHeatmapTable();
+}
+
+// Schlüssel für eine (Quiz, Versuch)-Spalte, z.B. "9e_quiz#0".
+function colKey(col) { return col.qid + '#' + col.attempt; }
+
+// Bildet aus pct-Werten den Durchschnitt der besten N bzw. aller außer den
+// schlechtesten N (mit Floor von mindestens 1 verbleibendem Wert).
+function berechneAuswahlDurchschnitt(pctWerte, modus, n) {
+  if (!pctWerte.length) return null;
+  const sorted = [...pctWerte].sort((a, b) => b - a);
+  const used = modus === 'schlechteste'
+    ? sorted.slice(0, Math.max(1, sorted.length - n))
+    : sorted.slice(0, Math.max(1, Math.min(n, sorted.length)));
+  const avgPct = Math.round(used.reduce((s, p) => s + p, 0) / used.length);
+  return { avgPct, anzahl: used.length, gesamt: pctWerte.length };
+}
+
+function renderAuswahlZelle(pctWerte, auswahl) {
+  const result = berechneAuswahlDurchschnitt(pctWerte, auswahl.modus, auswahl.n);
+  if (!result) return '<span class="hm-cell hm-na">–</span>';
+  const farbe = result.avgPct >= 80 ? '#2d6a4f' : result.avgPct >= 60 ? '#e65100' : '#c62828';
+  return `<span class="hm-cell" style="background:#f0f0f0;color:${farbe};" title="${result.anzahl} von ${result.gesamt} Ergebnissen">Ø ${result.avgPct}%</span>`;
+}
+
+// Lädt (gecacht) die Notenskala (QUIZ_CFG.stufe) eines Quiz — gleiches
+// Fetch+Regex-Muster wie exportFreitext().
+async function ladeQuizStufe(qid) {
+  if (window._quizStufenCache[qid] !== undefined) return window._quizStufenCache[qid];
+  let stufe = null;
+  try {
+    const res = await fetch(`./quiz-${qid}.html`);
+    if (res.ok) {
+      const txt = await res.text();
+      const m = txt.match(/const QUIZ_CFG = (\{[\s\S]*?\n\});/);
+      if (m) stufe = JSON.parse(m[1]).stufe || null;
+    }
+  } catch (e) { /* Quiz-Datei nicht erreichbar — Ø bleibt als reiner Prozentwert */ }
+  window._quizStufenCache[qid] = stufe;
+  return stufe;
+}
+
+// Holt für die ausgewählten Quizze die Notenskala nach und ersetzt die
+// "Ø Auswahl"-Zellen durch "<Note> (Ø <pct>%)", falls eindeutig.
+async function aktualisiereNotenSpalte() {
+  const auswahl = window._notenAuswahl;
+  if (!auswahl) return;
+  const groups = window._heatmapGroups;
+  const columns = window._heatmapColumns;
+
+  const selectedQuizIds = [...new Set(columns.filter(c => auswahl.spalten.has(colKey(c))).map(c => c.qid))];
+  const stufen = await Promise.all(selectedQuizIds.map(ladeQuizStufe));
+  if (window._notenAuswahl !== auswahl) return; // Panel wurde inzwischen verändert/geschlossen
+
+  const uniqueStufen = [...new Set(stufen.filter(Boolean))];
+  const einheitlicheStufe = uniqueStufen.length === 1 ? uniqueStufen[0] : null;
+  const gemischt = uniqueStufen.length > 1;
+
+  document.querySelectorAll('[data-noten-name]').forEach(cell => {
+    const name = cell.dataset.notenName;
+    const pctWerte = [];
+    columns.forEach(col => {
+      if (!auswahl.spalten.has(colKey(col))) return;
+      const versuche = (groups[col.qid] && groups[col.qid].byName[name]) || [];
+      const r = versuche[col.attempt];
+      if (!r) return;
+      try {
+        const a = auswerten(r);
+        if (!a.pending) pctWerte.push(a.pct);
+      } catch (e) {}
+    });
+    const result = berechneAuswahlDurchschnitt(pctWerte, auswahl.modus, auswahl.n);
+    if (!result) { cell.innerHTML = '<span class="hm-cell hm-na">–</span>'; return; }
+    const farbe = result.avgPct >= 80 ? '#2d6a4f' : result.avgPct >= 60 ? '#e65100' : '#c62828';
+    if (einheitlicheStufe) {
+      const note = getNote(result.avgPct, einheitlicheStufe);
+      cell.innerHTML = `<span class="hm-cell" style="background:#f0f0f0;color:${farbe};" title="${result.anzahl} von ${result.gesamt} Ergebnissen">${note} (Ø ${result.avgPct}%)</span>`;
+    } else if (gemischt) {
+      cell.innerHTML = `<span class="hm-cell" style="background:#f0f0f0;color:${farbe};" title="Quizze mit unterschiedlichen Notenskalen — Note nicht eindeutig (${result.anzahl} von ${result.gesamt} Ergebnissen)">Ø ${result.avgPct}%</span>`;
+    } else {
+      cell.innerHTML = `<span class="hm-cell" style="background:#f0f0f0;color:${farbe};" title="${result.anzahl} von ${result.gesamt} Ergebnissen">Ø ${result.avgPct}%</span>`;
     }
   });
+}
 
-  let html = '<table class="heatmap-table"><thead><tr><th>Schüler/in</th>';
+function toggleNotenPanel() {
+  if (window._notenAuswahl) {
+    window._notenAuswahl = null;
+  } else {
+    window._notenAuswahl = { spalten: new Set((window._heatmapColumns || []).map(colKey)), modus: 'beste', n: 3 };
+  }
+  renderHeatmapTable();
+}
+
+function resetNotenAuswahl() {
+  if (!window._notenAuswahl) return;
+  window._notenAuswahl = { spalten: new Set((window._heatmapColumns || []).map(colKey)), modus: 'beste', n: 3 };
+  renderHeatmapTable();
+}
+
+function setNotenSpalte(key, checked) {
+  if (!window._notenAuswahl) return;
+  if (checked) window._notenAuswahl.spalten.add(key);
+  else window._notenAuswahl.spalten.delete(key);
+  renderHeatmapTable();
+}
+
+function setNotenModus(modus) {
+  if (!window._notenAuswahl) return;
+  window._notenAuswahl.modus = modus;
+  renderHeatmapTable();
+}
+
+function setNotenN(n) {
+  if (!window._notenAuswahl) return;
+  const val = parseInt(n);
+  window._notenAuswahl.n = (isNaN(val) || val < 1) ? 1 : val;
+  renderHeatmapTable();
+}
+
+// CSV-Export der aktuellen Auswahl (ausgewählte Spalten + "Ø Auswahl"-Spalte
+// mit Notenumrechnung, falls die ausgewählten Quizze dieselbe Notenskala haben).
+async function exportNotenAuswahl() {
+  const auswahl = window._notenAuswahl;
+  if (!auswahl) return;
+  const columns = window._heatmapColumns.filter(c => auswahl.spalten.has(colKey(c)));
+  if (!columns.length) { alert('Bitte mindestens eine Spalte für den Notendurchschnitt auswählen.'); return; }
+
+  const selectedQuizIds = [...new Set(columns.map(c => c.qid))];
+  const stufen = await Promise.all(selectedQuizIds.map(ladeQuizStufe));
+  const uniqueStufen = [...new Set(stufen.filter(Boolean))];
+  const einheitlicheStufe = uniqueStufen.length === 1 ? uniqueStufen[0] : null;
+
+  const csv = buildErgebnisseCSV(columns, [
+    { label: 'Ø Auswahl', value: (name, cellData) => {
+      const pctWerte = cellData.filter(c => c.a && !c.a.pending).map(c => c.a.pct);
+      const result = berechneAuswahlDurchschnitt(pctWerte, auswahl.modus, auswahl.n);
+      if (!result) return '';
+      return einheitlicheStufe ? `${getNote(result.avgPct, einheitlicheStufe)} (Ø ${result.avgPct}%)` : `Ø ${result.avgPct}%`;
+    } }
+  ]);
+  downloadCSV(csv, `notendurchschnitt-${aktuellKlasse}-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+// Rendert die Heatmap-Tabelle (inkl. optionalem Notendurchschnitt-Panel) aus
+// den bei renderHeatmap() gecachten Daten — wird auch von den Panel-Aktionen
+// (Checkbox, Modus, N, Zurücksetzen, Toggle) für ein leichtgewichtiges
+// Neuzeichnen ohne erneuten Reset von window._notenAuswahl aufgerufen.
+function renderHeatmapTable() {
+  const container = document.getElementById('heatmap-container');
+  const groups = window._heatmapGroups;
+  const columns = window._heatmapColumns;
+  const schueler = window._heatmapSchueler;
+  const auswahl = window._notenAuswahl;
+
+  let html = `<div style="margin-bottom:12px;">
+    <button class="btn btn-sm btn-outline" onclick="toggleNotenPanel()">📊 Notendurchschnitt aus Auswahl berechnen</button>
+  </div>`;
+
+  if (auswahl) {
+    html += `<div style="background:#f8f8ff;border-radius:10px;padding:14px;margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:0.88em;">
+      <label style="margin:0;">Modus:
+        <select onchange="setNotenModus(this.value)" style="width:auto;display:inline-block;margin-left:4px;">
+          <option value="beste" ${auswahl.modus === 'beste' ? 'selected' : ''}>Beste N zählen</option>
+          <option value="schlechteste" ${auswahl.modus === 'schlechteste' ? 'selected' : ''}>Schlechteste N streichen</option>
+        </select>
+      </label>
+      <label style="margin:0;">N:
+        <input type="number" min="1" value="${auswahl.n}" style="width:60px;display:inline-block;margin-left:4px;" onchange="setNotenN(this.value)">
+      </label>
+      <button class="btn btn-sm btn-outline" onclick="resetNotenAuswahl()">🔄 Zurücksetzen</button>
+      <button class="btn btn-sm btn-primary" onclick="exportNotenAuswahl()">⬇ Übersicht exportieren</button>
+      <span style="color:#888;">Spalten per Checkbox in der Kopfzeile aus der Berechnung nehmen.</span>
+    </div>`;
+  }
+
+  html += '<table class="heatmap-table"><thead><tr><th>Schüler/in</th>';
   columns.forEach(col => {
-    const label = col.maxVersuche > 1 ? `${col.titel} (Versuch ${col.attempt + 1})` : col.titel;
-    html += `<th title="${escH(label)}">${escH(label.slice(0,18))}${label.length > 18 ? '…' : ''}</th>`;
+    const checkbox = auswahl
+      ? `<br><input type="checkbox" ${auswahl.spalten.has(colKey(col)) ? 'checked' : ''} onchange="setNotenSpalte('${escH(colKey(col))}', this.checked)" title="Für Notendurchschnitt berücksichtigen">`
+      : '';
+    html += `<th title="${escH(col.label)}">${escH(col.label.slice(0,18))}${col.label.length > 18 ? '…' : ''}${checkbox}</th>`;
   });
+  if (auswahl) html += `<th>Ø Auswahl</th>`;
   html += '</tr></thead><tbody>';
 
   schueler.forEach(name => {
     html += `<tr><td style="font-weight:600;">${escH(name)}</td>`;
+    const pctWerte = [];
     columns.forEach(col => {
       const versuche = groups[col.qid].byName[name] || [];
       const r = versuche[col.attempt];
@@ -571,15 +831,21 @@ function renderHeatmap() {
         const cls = pending ? 'hm-pending' : (lang > 0 ? 'hm-flag' : `hm-${note}`);
         const label = pending ? '📝 ausstehend' : (lang > 0 ? `⚠ ${note}` : note);
         html += `<td><span class="hm-cell ${cls}" style="cursor:pointer;" onclick="zeigeDetail('${escH(name)}','${escH(col.qid)}',${col.attempt})" title="${pct}%">${label} (${pct}%)</span></td>`;
+        if (auswahl && auswahl.spalten.has(colKey(col)) && !pending) pctWerte.push(pct);
       } catch (err) {
         html += `<td><span class="hm-cell hm-na" title="${escH(err.message)}">⚠ Fehler</span></td>`;
       }
     });
+    if (auswahl) {
+      html += `<td data-noten-name="${escH(name)}">${renderAuswahlZelle(pctWerte, auswahl)}</td>`;
+    }
     html += '</tr>';
   });
 
   html += '</tbody></table>';
   container.innerHTML = html;
+
+  if (auswahl) aktualisiereNotenSpalte();
 }
 
 function zeigeDetail(name, quizId, attempt) {
@@ -688,6 +954,17 @@ function zeigeSchuelerDetail(name) {
   document.getElementById('schueler-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// Druckt nur die Schüler-Detail-Karte (siehe @media print "printing-schueler").
+function exportSchuelerPDF() {
+  const name = document.getElementById('schueler-detail-name').textContent;
+  const datum = new Date().toLocaleDateString('de-DE');
+  document.getElementById('print-header').innerHTML =
+    `<h2>${escH(name)}</h2><div>Klasse ${escH(aktuellKlasse)} · Fach ${escH(aktuellFach)} · Stand: ${datum}</div>`;
+  document.body.classList.add('printing-schueler');
+  window.print();
+  document.body.classList.remove('printing-schueler');
+}
+
 // ── Freitext-Liste ───────────────────────────────────────────
 // Farbakzent pro Abgabe (Name+Zeitstempel) — wechselt zyklisch, damit
 // aufeinanderfolgende Abgaben (egal ob gleiche oder andere Person) optisch
@@ -712,6 +989,7 @@ function renderFreitextListe() {
     const matches = details.matchAll(/\[FREITEXT ([\w]+)\] (.+?)(?=\n\[|$)/gs);
     const beMap = parseFreitextMap(r['Freitext-BE']);
     const notizMap = parseFreitextMap(r['Lehrer-Notiz']);
+    const archMap = parseFreitextMap(r['Freitext-Archiviert']);
     const fids = freitextFids(r);
     if (fids.length === 1 && beMap['_legacy'] !== undefined && beMap[fids[0]] === undefined) {
       beMap[fids[0]] = beMap['_legacy'];
@@ -722,7 +1000,8 @@ function renderFreitextListe() {
     for (const m of matches) {
       freitextEntries.push({
         name: r['Name'], quizId: r['Quiz-ID'], titel: r['Quiz-Titel'], fid: m[1], antwort: m[2].trim(),
-        zeitstempel: r['Zeitstempel'], be: beMap[m[1]], notiz: notizMap[m[1]], versuchLabel
+        zeitstempel: r['Zeitstempel'], be: beMap[m[1]], notiz: notizMap[m[1]], versuchLabel,
+        archiviert: !!archMap[m[1]]
       });
     }
   });
@@ -732,13 +1011,34 @@ function renderFreitextListe() {
     window._freitextEntries = [];
     return;
   }
+  window._freitextEntries = freitextEntries;
+
+  const archCount = freitextEntries.filter(e => e.archiviert).length;
+  const ansicht = window._freitextAnsicht || 'aktiv';
+  const sichtbar = freitextEntries
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => ansicht === 'archiv' ? e.archiviert : !e.archiviert);
+
+  let html = `<div style="margin-bottom:14px;">
+    <button class="btn btn-sm btn-outline" onclick="toggleFreitextArchiv()">${ansicht === 'archiv' ? `↩ Zur aktiven Liste (${freitextEntries.length - archCount})` : `📦 Archiv anzeigen (${archCount})`}</button>
+  </div>`;
+
+  if (!sichtbar.length) {
+    html += `<p style="color:#888;font-size:0.88em;">${ansicht === 'archiv' ? 'Keine archivierten Einträge.' : 'Alle Einträge sind archiviert.'}</p>`;
+    container.innerHTML = html;
+    return;
+  }
 
   let colorIdx = -1, lastKey = null;
-  container.innerHTML = freitextEntries.map((e, i) => {
+  html += sichtbar.map(({ e, i }) => {
     const key = e.name + '|' + e.zeitstempel;
     if (key !== lastKey) { colorIdx = (colorIdx + 1) % FT_PALETTE.length; lastKey = key; }
     const farbe = FT_PALETTE[colorIdx];
     const zeit = String(e.zeitstempel || '').slice(0, 16).replace('T', ' ');
+    const aktionen = ansicht === 'archiv'
+      ? `<button class="btn btn-sm btn-outline" onclick="speichereFreitext(${i}, {archiviert:false})">↩ Reaktivieren</button>`
+      : `<button class="btn btn-sm btn-primary" onclick="speichereFreitext(${i})">Speichern</button>
+         <button class="btn btn-sm btn-outline" onclick="speichereFreitext(${i}, {archiviert:true})">✓ Speichern &amp; archivieren</button>`;
     return `
     <div class="freitext-item" style="border-left: 5px solid ${farbe};">
       <div class="freitext-frage"><strong>${escH(e.name)}</strong> · ${escH(e.titel || e.quizId)}${escH(e.versuchLabel)} · Aufgabe ${escH(e.fid)} · <span style="color:#bbb;">${escH(zeit)}</span></div>
@@ -747,13 +1047,18 @@ function renderFreitextListe() {
         <label style="margin:0;font-size:0.82em;white-space:nowrap;">Punkte:</label>
         <input type="number" id="ft-be-${i}" min="0" max="20" placeholder="0" value="${e.be || ''}" style="width:70px;">
         <input type="text" id="ft-notiz-${i}" placeholder="Lehrer-Notiz (optional)" value="${escH(e.notiz || '')}" style="flex:1;">
-        <button class="btn btn-sm btn-primary" onclick="speichereFreitext(${i})">Speichern</button>
+        ${aktionen}
       </div>
     </div>
   `;
   }).join('');
 
-  window._freitextEntries = freitextEntries;
+  container.innerHTML = html;
+}
+
+function toggleFreitextArchiv() {
+  window._freitextAnsicht = window._freitextAnsicht === 'archiv' ? 'aktiv' : 'archiv';
+  renderFreitextListe();
 }
 
 // ── Export für KI-gestützte Bewertung ─────────────────────────
@@ -792,27 +1097,32 @@ async function exportFreitext() {
     return null;
   }
 
-  const byName = {};
-  entries.forEach(e => { (byName[e.name] = byName[e.name] || []).push(e); });
-
   let md = `# Freitext-Antworten — Export zur Bewertung\n\n`;
-  md += `Klasse: ${aktuellKlasse} · Fach: ${aktuellFach} · Erstellt: ${new Date().toLocaleString('de-DE')}\n\n---\n\n`;
+  md += `Klasse: ${aktuellKlasse} · Fach: ${aktuellFach} · Erstellt: ${new Date().toLocaleString('de-DE')}\n\n`;
+  md += `${entries.length} Einträge — die Übersicht und der KI-Prompt am Ende verwenden dieselben Eintragsnummern wie die Detailblöcke unten.\n\n---\n\n`;
 
-  Object.entries(byName).forEach(([name, list]) => {
-    md += `## ${name}\n\n`;
-    list.forEach(e => {
-      const meta = fragenMeta(e.quizId, e.fid);
-      const zeit = String(e.zeitstempel || '').slice(0, 16).replace('T', ' ');
-      md += `### ${e.titel || e.quizId}${e.versuchLabel} — Aufgabe ${e.fid} (${zeit})\n\n`;
-      if (meta) {
-        md += `**Frage:** ${meta.text}\n\n`;
-        md += `**Musterlösung:** ${meta.musterloesung || '–'}\n\n`;
-        md += `**Maximale BE:** ${meta.maxBE ?? '–'}\n\n`;
-      }
-      md += `**Antwort von ${name}:**\n${e.antwort || '(keine Antwort)'}\n\n`;
-      md += `**Bisherige Bewertung:** ${e.be !== undefined ? e.be + ' BE' : '(noch nicht bewertet)'}${e.notiz ? ' — ' + e.notiz : ''}\n\n`;
-      md += `---\n\n`;
-    });
+  // Übersichtstabelle (Eintragsnummern = Anker für Detailblöcke + KI-Prompt)
+  md += `## Übersicht\n\n`;
+  md += `| # | Schüler:in | Quiz | Aufgabe | Status |\n`;
+  md += `|---|---|---|---|---|\n`;
+  entries.forEach((e, i) => {
+    const status = e.be !== undefined ? `bewertet: ${e.be} BE` : 'offen';
+    md += `| ${i + 1} | ${e.name} | ${e.titel || e.quizId}${e.versuchLabel} | ${e.fid} | ${status} |\n`;
+  });
+  md += `\n---\n\n`;
+
+  // Detailblöcke, ein Eintrag pro Freitextantwort, einheitliches Feldformat
+  entries.forEach((e, i) => {
+    const meta = fragenMeta(e.quizId, e.fid);
+    md += `## Eintrag ${i + 1} — ${e.name} · ${e.titel || e.quizId}${e.versuchLabel} · Aufgabe ${e.fid}\n\n`;
+    if (meta) {
+      md += `**Frage:** ${meta.text}\n\n`;
+      md += `**Musterlösung:** ${meta.musterloesung || '–'}\n\n`;
+      md += `**Maximale BE:** ${meta.maxBE ?? '–'}\n\n`;
+    }
+    md += `**Antwort:** ${e.antwort || '(keine Antwort)'}\n\n`;
+    md += `**Bisherige Bewertung:** ${e.be !== undefined ? e.be + ' BE' : '(noch nicht bewertet)'}${e.notiz ? ' — ' + e.notiz : ''}\n\n`;
+    md += `---\n\n`;
   });
 
   const stufen = [...new Set(quizIds.map(qid => cfgs[qid] && cfgs[qid].stufe).filter(Boolean))];
@@ -820,14 +1130,14 @@ async function exportFreitext() {
 
   md += `\n## KI-Prompt zur Bewertung\n\n`;
   md += `Du bist Lehrkraft für ${aktuellFach} in Klasse ${aktuellKlasse} (Notenskala: ${stufeText}) `;
-  md += `und bewertest die oben aufgeführten Freitext-Antworten.\n\n`;
-  md += `Gehe für JEDE Antwort einzeln vor:\n`;
+  md += `und bewertest die oben aufgeführten Freitext-Antworten (Einträge 1–${entries.length}).\n\n`;
+  md += `Gehe für JEDEN Eintrag einzeln vor:\n`;
   md += `1. Vergleiche die Schülerantwort inhaltlich mit der Musterlösung — welche zentralen Aspekte/Argumente sind enthalten, welche fehlen oder sind unpräzise?\n`;
   md += `2. Berücksichtige das Niveau der Klassenstufe — erwarte keine wörtliche Übereinstimmung mit der Musterlösung, sondern inhaltliche Richtigkeit und ein dem Niveau angemessenes Verständnis.\n`;
   md += `3. Schlage eine Punktzahl von 0 bis zur angegebenen maximalen BE vor (auch halbe Punkte möglich).\n`;
   md += `4. Begründe den Vorschlag in 2–3 Sätzen, wertschätzend und konstruktiv formuliert, sodass die Begründung direkt als Rückmeldung an die Schülerin/den Schüler verwendet werden kann.\n\n`;
-  md += `Gib die Bewertung für jede Antwort in folgendem Format aus:\n\n`;
-  md += `**[Name] – [Quiz] – Aufgabe [ID]:** [Vorschlag] / [Max-BE] BE\nBegründung: ...\n`;
+  md += `Gib die Bewertung für jeden Eintrag in folgendem Format aus, in der Reihenfolge der Eintragsnummern:\n\n`;
+  md += `**Eintrag [Nummer]:** [Vorschlag] / [Max-BE] BE\nBegründung: ...\n`;
 
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -840,12 +1150,14 @@ async function exportFreitext() {
   URL.revokeObjectURL(url);
 }
 
-async function speichereFreitext(idx) {
+async function speichereFreitext(idx, opts) {
   const e = window._freitextEntries[idx];
   const be = parseFloat(document.getElementById(`ft-be-${idx}`).value) || 0;
   const notiz = document.getElementById(`ft-notiz-${idx}`).value;
+  const payload = { action: 'updateFreitext', zeitstempel: e.zeitstempel, name: e.name, quizId: e.quizId, fragenId: e.fid, freitextBE: be, lehrerNotiz: notiz };
+  if (opts && opts.archiviert !== undefined) payload.archiviert = opts.archiviert;
   try {
-    const res = await gasPost({ action: 'updateFreitext', zeitstempel: e.zeitstempel, name: e.name, quizId: e.quizId, fragenId: e.fid, freitextBE: be, lehrerNotiz: notiz });
+    const res = await gasPost(payload);
     if (res.success) {
       document.getElementById(`ft-be-${idx}`).style.background = '#d8f3dc';
       ladeDaten();
@@ -917,16 +1229,38 @@ async function testeVerbindung() {
 }
 
 // ── CSV-Export ───────────────────────────────────────────────
+// Pivot-Layout wie die Heatmap: eine Zeile pro Schüler:in (auch ohne
+// Abgabe → "Fehlt"), eine Spalte pro Quiz/Versuch, plus "Teilnahmen".
 function exportCSV() {
   if (!alleErgebnisse.length) return;
-  const headers = ['Name','Klasse','Fach','Quiz-ID','Quiz-Titel','Punkte','MaxPunkte','Prozent','Note','Stimmung','Zeitstempel'];
-  const rows = alleErgebnisse.map(r => headers.map(h => `"${(r[h] || '').toString().replace(/"/g,'""')}"`).join(','));
-  const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `ergebnisse-${aktuellKlasse}-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click(); URL.revokeObjectURL(url);
+  const columns = alleHeatmapSpalten(gruppiereNachQuizUndSchueler(alleErgebnisse));
+  const csv = buildErgebnisseCSV(columns, [
+    { label: 'Teilnahmen', value: (name, cellData) => String(cellData.filter(c => c.text !== 'Fehlt' && c.text !== '').length) }
+  ]);
+  downloadCSV(csv, `ergebnisse-${aktuellKlasse}-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+// Verschiebt alle Ergebnisse der aktuellen Klasse/Fach-Kombination ins Archiv
+// (siehe archiveResults in Code.gs) — nach erzwungenem CSV-Export und Bestätigung.
+async function zuruecksetzenKlasse() {
+  if (!alleErgebnisse.length) {
+    alert('Keine Daten zum Zurücksetzen vorhanden.');
+    return;
+  }
+  exportCSV();
+  const anzahl = alleErgebnisse.length;
+  const ok = confirm(`Die CSV wurde heruntergeladen.\n\nJetzt ${anzahl} Ergebnis(se) für Klasse ${aktuellKlasse} / Fach ${aktuellFach} aus dem aktiven Dashboard entfernen?\n\nSie bleiben im Sheet "Ergebnisse-Archiv" erhalten.`);
+  if (!ok) return;
+  try {
+    const res = await gasPost({ action: 'archiveResults', klasse: aktuellKlasse, fach: aktuellFach });
+    if (res.success) {
+      ladeDaten();
+    } else {
+      alert('Fehler: ' + (res.error || 'unbekannt'));
+    }
+  } catch(e) {
+    alert('Fehler: ' + e.message);
+  }
 }
 
 // ── Hilfsfunktionen ──────────────────────────────────────────
